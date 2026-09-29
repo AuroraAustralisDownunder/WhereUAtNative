@@ -1,12 +1,38 @@
+## Build
 bin/
 obj/
+[Bb]in/
+[Oo]bj/
+out/
+artifacts/
+
+## IDE / OS
 .vs/
+.idea/
 *.user
 *.suo
 *.userprefs
+*.swp
+*~
 .DS_Store
+Thumbs.db
+
+## MAUI / mobile packages
 *.apk
 *.aab
 *.ipa
 *.xip
 *.dmg
+*.app
+*.msix
+*.msixbundle
+
+## NuGet
+*.nupkg
+packages/
+
+## Local secrets / keys (keep committed Firebase client configs that already ship with the app)
+*.pfx
+*.keystore
+local.properties
+appsettings.*.local.json

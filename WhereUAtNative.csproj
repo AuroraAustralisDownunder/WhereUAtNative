@@ -28,10 +28,10 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Display name -->
-		<ApplicationTitle>WhereUAtNative</ApplicationTitle>
+		<ApplicationTitle>Where U At</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.whereuatnative</ApplicationId>
+		<ApplicationId>com.familytracker.whereuat</ApplicationId>
 
 		<!-- Versions -->
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -71,11 +71,11 @@
 		<PackageReference Include="Plugin.Firebase" Version="4.2.1" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-android'">
+	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
 		<GoogleServicesJson Include="Platforms\Android\google-services.json" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-ios' Or '$(TargetFramework)' == 'net8.0-maccatalyst'">
+	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0-ios' Or '$(TargetFramework)' == 'net10.0-maccatalyst'">
 		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" Link="GoogleService-Info.plist" />
 	</ItemGroup>
 

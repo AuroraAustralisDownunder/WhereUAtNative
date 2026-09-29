@@ -2,40 +2,60 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="WhereUAtNative.Views.LoginPage"
-             Title="Family Tracker Login">
+             Title="Family Tracker Login"
+             BackgroundColor="#F7F9FC">
 
-    <VerticalStackLayout Spacing="20" 
-                         Padding="30" 
-                         VerticalOptions="Center" 
+    <VerticalStackLayout Spacing="20"
+                         Padding="30"
+                         VerticalOptions="Center"
                          MaximumWidthRequest="400">
 
-        <Label Text="Family Tracker" 
-               FontSize="32" 
-               FontAttributes="Bold" 
-               HorizontalOptions="Center" 
-               TextColor="#333333"
-               Margin="0,0,0,20" />
+        <Label Text="Family Tracker"
+               FontSize="32"
+               FontAttributes="Bold"
+               HorizontalOptions="Center"
+               TextColor="#1A1A2E"
+               Margin="0,0,0,4" />
 
-        <Entry Placeholder="Email" 
-               Keyboard="Email" 
+        <Label Text="Where U At"
+               FontSize="16"
+               HorizontalOptions="Center"
+               TextColor="#666666"
+               Margin="0,0,0,16" />
+
+        <Entry Placeholder="Email"
+               Keyboard="Email"
                ClearButtonVisibility="WhileEditing"
-               Text="{Binding Email}" />
+               Text="{Binding Email}"
+               IsEnabled="{Binding IsNotBusy}" />
 
-        <Entry Placeholder="Password" 
-               IsPassword="True" 
+        <Entry Placeholder="Password"
+               IsPassword="True"
                ClearButtonVisibility="WhileEditing"
-               Text="{Binding Password}" />
+               Text="{Binding Password}"
+               IsEnabled="{Binding IsNotBusy}" />
 
-        <Button Text="Secure Login" 
+        <Button Text="Secure Login"
                 BackgroundColor="#4CAF50"
                 TextColor="White"
                 CornerRadius="8"
                 HeightRequest="50"
                 FontAttributes="Bold"
-                Command="{Binding LoginCommand}" />
+                Command="{Binding LoginCommand}"
+                IsEnabled="{Binding IsNotBusy}" />
+
+        <ActivityIndicator IsRunning="{Binding IsBusy}"
+                           IsVisible="{Binding IsBusy}"
+                           Color="#4CAF50"
+                           HeightRequest="36" />
+
+        <Label Text="{Binding StatusMessage}"
+               TextColor="#555555"
+               HorizontalOptions="Center"
+               IsVisible="{Binding IsStatusVisible}" />
 
         <Label Text="{Binding ErrorMessage}"
-               TextColor="Red"
+               TextColor="#E53935"
                HorizontalOptions="Center"
                IsVisible="{Binding IsErrorVisible}" />
 

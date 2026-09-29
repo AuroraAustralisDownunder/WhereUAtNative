@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="WhereUAtNative.Views.HomePage"
+             Title="Where U At"
+             BackgroundColor="#F7F9FC">
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="20"
+                             Padding="30"
+                             VerticalOptions="Center"
+                             MaximumWidthRequest="420">
+
+            <Label Text="Where U At"
+                   FontSize="28"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                   TextColor="#1A1A2E" />
+
+            <Label Text="{Binding WelcomeText}"
+                   FontSize="18"
+                   HorizontalOptions="Center"
+                   TextColor="#333333" />
+
+            <Border Stroke="#E0E6ED"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 12"
+                    BackgroundColor="#FFFFFF"
+                    Padding="16"
+                    Margin="0,8,0,0">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Privacy"
+                           FontAttributes="Bold"
+                           FontSize="16"
+                           TextColor="#1A1A2E" />
+                    <Label Text="Your location is never shared unless you turn it on."
+                           FontSize="14"
+                           TextColor="#555555"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Stroke="#E0E6ED"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 12"
+                    BackgroundColor="#FFFFFF"
+                    Padding="16">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Location sharing"
+                           FontAttributes="Bold"
+                           FontSize="16"
+                           TextColor="#1A1A2E" />
+                    <Label Text="Coming next — off by default."
+                           FontSize="14"
+                           TextColor="#555555"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                               IsVisible="{Binding IsBusy}"
+                               Color="#4CAF50"
+                               HeightRequest="36" />
+
+            <Button Text="Sign out"
+                    BackgroundColor="#E53935"
+                    TextColor="White"
+                    CornerRadius="8"
+                    HeightRequest="50"
+                    FontAttributes="Bold"
+                    Command="{Binding SignOutCommand}"
+                    IsEnabled="{Binding IsNotBusy}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

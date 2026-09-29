@@ -1,12 +1,12 @@
+using WhereUAtNative.ViewModels;
+
 namespace WhereUAtNative.Views;
 
 public partial class LoginPage : ContentPage
 {
-    public LoginPage()
+    public LoginPage(LoginViewModel viewModel)
     {
         InitializeComponent();
-        
-        // This links the UI to your logic
-        BindingContext = new ViewModels.LoginViewModel();
+        BindingContext = viewModel;
     }
 }

@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.Logging;
-using Plugin.Firebase.Auth;
-using Plugin.Firebase;
-using Plugin.Firebase.CloudMessaging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
+using WhereUAtNative.Services;
+using WhereUAtNative.ViewModels;
+using WhereUAtNative.Views;
+using Plugin.Firebase;
 #if IOS
 using Plugin.Firebase.Core.Platforms.iOS;
 #elif ANDROID
@@ -24,8 +25,8 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // Initialize Firebase Native Engine
         RegisterFirebaseServices(builder);
+        RegisterAppServices(builder);
 
 #if DEBUG
         builder.Logging.AddDebug();
@@ -34,11 +35,27 @@ public static class MauiProgram
         return builder.Build();
     }
 
+    private static void RegisterAppServices(MauiAppBuilder builder)
+    {
+        builder.Services.AddSingleton<IAuthService, FirebaseAuthService>();
+
+        builder.Services.AddTransient<LoginViewModel>();
+        builder.Services.AddTransient<HomeViewModel>();
+
+        // Shell root pages are created once and kept for the app session.
+        builder.Services.AddSingleton<LoginPage>();
+        builder.Services.AddSingleton<HomePage>();
+
+        builder.Services.AddSingleton<AppShell>();
+    }
+
     private static void RegisterFirebaseServices(MauiAppBuilder builder)
     {
-        builder.ConfigureLifecycleEvents(events => {
+        builder.ConfigureLifecycleEvents(events =>
+        {
 #if IOS
-            events.AddiOS(iOS => iOS.WillFinishLaunching((app, dict) => {
+            events.AddiOS(iOS => iOS.WillFinishLaunching((app, dict) =>
+            {
                 CrossFirebase.Initialize();
                 return true;
             }));
