@@ -1,12 +1,14 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-using Plugin.Firebase.Auth;
+using WhereUAtNative.Services;
 
 namespace WhereUAtNative.ViewModels;
 
 public class LoginViewModel : INotifyPropertyChanged
 {
+    private readonly IAuthService _authService;
+
     private string? _email;
     public string? Email
     {
@@ -35,16 +37,52 @@ public class LoginViewModel : INotifyPropertyChanged
         set { _isErrorVisible = value; OnPropertyChanged(); }
     }
 
-    public ICommand LoginCommand { get; }
-
-    public LoginViewModel()
+    private string? _statusMessage;
+    public string? StatusMessage
     {
-        LoginCommand = new Command(async () => await PerformLogin());
+        get => _statusMessage;
+        set { _statusMessage = value; OnPropertyChanged(); }
     }
 
-    private async Task PerformLogin()
+    private bool _isStatusVisible;
+    public bool IsStatusVisible
     {
+        get => _isStatusVisible;
+        set { _isStatusVisible = value; OnPropertyChanged(); }
+    }
+
+    private bool _isBusy;
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            _isBusy = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsNotBusy));
+            ((Command)LoginCommand).ChangeCanExecute();
+        }
+    }
+
+    public bool IsNotBusy => !IsBusy;
+
+    public ICommand LoginCommand { get; }
+
+    public LoginViewModel(IAuthService authService)
+    {
+        _authService = authService;
+        LoginCommand = new Command(async () => await PerformLoginAsync(), () => !IsBusy);
+    }
+
+    private async Task PerformLoginAsync()
+    {
+        if (IsBusy)
+            return;
+
         IsErrorVisible = false;
+        IsStatusVisible = false;
+        ErrorMessage = null;
+        StatusMessage = null;
 
         if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Password))
         {
@@ -55,28 +93,35 @@ public class LoginViewModel : INotifyPropertyChanged
 
         try
         {
-            ErrorMessage = "Authenticating securely...";
-            IsErrorVisible = true; 
+            IsBusy = true;
+            StatusMessage = "Signing in…";
+            IsStatusVisible = true;
 
-            // This talks directly to the native Firebase SDKs we configured
-            var authResult = await CrossFirebaseAuth.Current.SignInWithEmailAndPasswordAsync(Email, Password);
+            var error = await _authService.SignInAsync(Email, Password);
+            if (error is not null)
+            {
+                IsStatusVisible = false;
+                StatusMessage = null;
+                ErrorMessage = error;
+                IsErrorVisible = true;
+                return;
+            }
 
-            // If it succeeds, we update the UI to show success
-            ErrorMessage = "Success! Securing connection...";
-            
-            // NOTE: Our next step will be navigating away from this page to the Map view!
+            Password = string.Empty;
+            IsStatusVisible = false;
+            StatusMessage = null;
+
+            // Replace stack so Back does not return to login.
+            await Shell.Current.GoToAsync("//HomePage");
         }
-        catch (Exception)
+        finally
         {
-            // We intentionally catch the raw exception here rather than displaying it.
-            // This displays a secure, generic message if the login fails.
-            ErrorMessage = "Login failed. Please verify your credentials.";
+            IsBusy = false;
         }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
