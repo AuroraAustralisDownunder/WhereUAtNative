@@ -1,14 +1,13 @@
-using Microsoft.Maui.Controls.Maps;
-using Microsoft.Maui.Maps;
+using System.Globalization;
 using WhereUAtNative.ViewModels;
-using MapControl = Microsoft.Maui.Controls.Maps.Map;
 
 namespace WhereUAtNative.Views;
 
 public partial class MapPage : ContentPage
 {
     private readonly MapViewModel _viewModel;
-    private Pin? _userPin;
+    private bool _mapReady;
+    private string? _cachedHtml;
 
     public MapPage(MapViewModel viewModel)
     {
@@ -21,8 +20,9 @@ public partial class MapPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        await EnsureMapLoadedAsync();
         await _viewModel.OnAppearingAsync();
-        SyncPinFromViewModel();
+        await SyncPinFromViewModelAsync();
     }
 
     protected override void OnDisappearing()
@@ -35,40 +35,79 @@ public partial class MapPage : ContentPage
     {
         if (e.PropertyName is nameof(MapViewModel.HasPin)
             or nameof(MapViewModel.PinLatitude)
-            or nameof(MapViewModel.PinLongitude))
+            or nameof(MapViewModel.PinLongitude)
+            or nameof(MapViewModel.StatusMessage))
         {
-            MainThread.BeginInvokeOnMainThread(SyncPinFromViewModel);
+            MainThread.BeginInvokeOnMainThread(async () => await SyncPinFromViewModelAsync());
         }
     }
 
-    private void SyncPinFromViewModel()
+    private async void OnMapWebViewNavigated(object? sender, WebNavigatedEventArgs e)
     {
-        if (UserMap is not MapControl map)
+        _mapReady = e.Result == WebNavigationResult.Success;
+        if (_mapReady)
+            await SyncPinFromViewModelAsync();
+    }
+
+    private async Task EnsureMapLoadedAsync()
+    {
+        if (MapWebView.Source is not null && _cachedHtml is not null)
             return;
-
-        map.Pins.Clear();
-        _userPin = null;
-
-        if (!_viewModel.HasPin)
-            return;
-
-        var position = new Microsoft.Maui.Devices.Sensors.Location(_viewModel.PinLatitude, _viewModel.PinLongitude);
-        _userPin = new Pin
-        {
-            Label = "You",
-            Type = PinType.Place,
-            Location = position
-        };
-        map.Pins.Add(_userPin);
 
         try
         {
-            var span = MapSpan.FromCenterAndRadius(position, Distance.FromKilometers(1));
-            map.MoveToRegion(span);
+            _cachedHtml ??= await LoadMapHtmlAsync();
+            MapWebView.Source = new HtmlWebViewSource { Html = _cachedHtml };
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to load map.html: {ex.Message}");
+            MapWebView.Source = new HtmlWebViewSource
+            {
+                Html = "<html><body style='font-family:sans-serif;padding:24px;color:#555'>Map assets failed to load.</body></html>"
+            };
+        }
+    }
+
+    private static async Task<string> LoadMapHtmlAsync()
+    {
+        await using var stream = await FileSystem.OpenAppPackageFileAsync("map.html");
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
+    }
+
+    private async Task SyncPinFromViewModelAsync()
+    {
+        if (!_mapReady)
+            return;
+
+        try
+        {
+            if (!_viewModel.HasPin)
+            {
+                var msg = EscapeJs(_viewModel.StatusMessage);
+                await MapWebView.EvaluateJavaScriptAsync($"clearPin('{msg}')");
+                return;
+            }
+
+            var lat = _viewModel.PinLatitude.ToString(CultureInfo.InvariantCulture);
+            var lon = _viewModel.PinLongitude.ToString(CultureInfo.InvariantCulture);
+            await MapWebView.EvaluateJavaScriptAsync($"setPin({lat}, {lon})");
         }
         catch
         {
-            // Map may not be ready yet (e.g. missing Android API key) — ignore.
+            // WebView may not be ready yet — ignore.
         }
+    }
+
+    private static string EscapeJs(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+        return value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("'", "\\'", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal);
     }
 }
