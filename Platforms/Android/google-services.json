@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "438926374560",
+    "firebase_url": "https://whereuat-firebase-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "whereuat-firebase",
+    "storage_bucket": "whereuat-firebase.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:438926374560:android:ff96c85e21beb42263bbc5",
+        "android_client_info": {
+          "package_name": "com.familytracker.whereuat"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "438926374560-legpscs21lt8brnotmgenn9h4tfr5jjc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcFbCiCyOWsDOfjX9v2PwYOnCABv5C9sw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "438926374560-legpscs21lt8brnotmgenn9h4tfr5jjc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
