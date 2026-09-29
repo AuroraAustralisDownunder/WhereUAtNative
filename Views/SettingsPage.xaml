@@ -1,38 +1,42 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="WhereUAtNative.Views.HomePage"
-             Title="Where U At"
+             x:Class="WhereUAtNative.Views.SettingsPage"
+             Title="Settings"
              BackgroundColor="#1C1C1E">
-
-    <ContentPage.ToolbarItems>
-        <ToolbarItem Text="Map"
-                     Command="{Binding OpenMapCommand}" />
-    </ContentPage.ToolbarItems>
 
     <ScrollView>
         <VerticalStackLayout Spacing="20"
-                             Padding="30"
+                             Padding="24"
                              VerticalOptions="Start"
                              MaximumWidthRequest="420">
 
-            <Label Text="Where U At"
-                   FontSize="28"
-                   FontAttributes="Bold"
-                   HorizontalOptions="Center"
-                   TextColor="#FFFFFF" />
-
-            <Label Text="{Binding WelcomeText}"
-                   FontSize="18"
-                   HorizontalOptions="Center"
-                   TextColor="#E5E5EA" />
+            <Border Stroke="#3A3A3C"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    BackgroundColor="#2C2C2E"
+                    Padding="16">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Account"
+                           FontAttributes="Bold"
+                           FontSize="16"
+                           TextColor="#FFFFFF" />
+                    <Label Text="{Binding AccountEmail}"
+                           FontSize="15"
+                           TextColor="#E5E5EA"
+                           LineBreakMode="MiddleTruncation" />
+                    <Label Text="{Binding LocationStatusText}"
+                           FontSize="13"
+                           TextColor="#AEAEB2"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
 
             <Border Stroke="#3A3A3C"
                     StrokeThickness="1"
-                    StrokeShape="RoundRectangle 12"
+                    StrokeShape="RoundRectangle 14"
                     BackgroundColor="#2C2C2E"
-                    Padding="16"
-                    Margin="0,8,0,0">
+                    Padding="16">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Privacy"
                            FontAttributes="Bold"
@@ -47,49 +51,7 @@
 
             <Border Stroke="#3A3A3C"
                     StrokeThickness="1"
-                    StrokeShape="RoundRectangle 12"
-                    BackgroundColor="#2C2C2E"
-                    Padding="16">
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="Location sharing"
-                           FontAttributes="Bold"
-                           FontSize="16"
-                           TextColor="#FFFFFF" />
-
-                    <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="12">
-                        <Label Grid.Column="0"
-                               Text="Share my location"
-                               FontSize="15"
-                               VerticalOptions="Center"
-                               TextColor="#E5E5EA" />
-                        <Switch Grid.Column="1"
-                                IsToggled="{Binding IsSharingEnabled, Mode=TwoWay}"
-                                OnColor="#4CAF50"
-                                VerticalOptions="Center" />
-                    </Grid>
-
-                    <Label Text="{Binding LocationStatusText}"
-                           FontSize="14"
-                           TextColor="#AEAEB2"
-                           LineBreakMode="WordWrap" />
-
-                    <Label Text="{Binding LocationHint}"
-                           FontSize="13"
-                           TextColor="#FFB74D"
-                           IsVisible="{Binding IsLocationHintVisible}"
-                           LineBreakMode="WordWrap" />
-
-                    <Label Text="Tip: open Map from the toolbar to see yourself and family when sharing is on."
-                           FontSize="12"
-                           TextColor="#8E8E93"
-                           LineBreakMode="WordWrap" />
-                </VerticalStackLayout>
-            </Border>
-
-            <Border Stroke="#3A3A3C"
-                    StrokeThickness="1"
-                    StrokeShape="RoundRectangle 12"
+                    StrokeShape="RoundRectangle 14"
                     BackgroundColor="#2C2C2E"
                     Padding="16">
                 <VerticalStackLayout Spacing="12">
@@ -114,7 +76,7 @@
                         <Button Text="Create family"
                                 BackgroundColor="#4CAF50"
                                 TextColor="White"
-                                CornerRadius="8"
+                                CornerRadius="10"
                                 HeightRequest="44"
                                 Command="{Binding CreateFamilyCommand}"
                                 IsEnabled="{Binding IsNotBusy}" />
@@ -135,7 +97,7 @@
                         <Button Text="Join family"
                                 BackgroundColor="#3A3A3C"
                                 TextColor="White"
-                                CornerRadius="8"
+                                CornerRadius="10"
                                 HeightRequest="44"
                                 Command="{Binding JoinFamilyCommand}"
                                 IsEnabled="{Binding IsNotBusy}" />
@@ -168,7 +130,7 @@
                         <Button Text="Leave family"
                                 BackgroundColor="#E53935"
                                 TextColor="White"
-                                CornerRadius="8"
+                                CornerRadius="10"
                                 HeightRequest="44"
                                 Command="{Binding LeaveFamilyCommand}"
                                 IsEnabled="{Binding IsNotBusy}" />
@@ -181,13 +143,12 @@
                                Color="#4CAF50"
                                HeightRequest="36" />
 
-            <Button Text="Sign out"
-                    BackgroundColor="#E53935"
+            <Button Text="Done"
+                    BackgroundColor="#3A3A3C"
                     TextColor="White"
-                    CornerRadius="8"
-                    HeightRequest="50"
-                    FontAttributes="Bold"
-                    Command="{Binding SignOutCommand}"
+                    CornerRadius="10"
+                    HeightRequest="48"
+                    Command="{Binding CloseCommand}"
                     IsEnabled="{Binding IsNotBusy}" />
 
         </VerticalStackLayout>

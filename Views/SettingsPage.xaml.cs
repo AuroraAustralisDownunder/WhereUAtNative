@@ -2,11 +2,11 @@ using WhereUAtNative.ViewModels;
 
 namespace WhereUAtNative.Views;
 
-public partial class HomePage : ContentPage
+public partial class SettingsPage : ContentPage
 {
-    private readonly HomeViewModel _viewModel;
+    private readonly SettingsViewModel _viewModel;
 
-    public HomePage(HomeViewModel viewModel)
+    public SettingsPage(SettingsViewModel viewModel)
     {
         InitializeComponent();
         _viewModel = viewModel;
@@ -17,11 +17,5 @@ public partial class HomePage : ContentPage
     {
         base.OnAppearing();
         await _viewModel.OnAppearingAsync();
-    }
-
-    protected override void OnDisappearing()
-    {
-        _viewModel.OnDisappearing();
-        base.OnDisappearing();
     }
 }

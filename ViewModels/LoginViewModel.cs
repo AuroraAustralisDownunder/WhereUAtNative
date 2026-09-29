@@ -112,7 +112,7 @@ public class LoginViewModel : INotifyPropertyChanged
             StatusMessage = null;
 
             // Replace stack so Back does not return to login.
-            await Shell.Current.GoToAsync("//HomePage");
+            await Shell.Current.GoToAsync("//MapPage");
         }
         finally
         {

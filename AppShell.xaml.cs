@@ -8,7 +8,7 @@ public partial class AppShell : Shell
     private readonly IAuthService _authService;
     private bool _startupNavigationDone;
 
-    public AppShell(IAuthService authService, LoginPage loginPage, HomePage homePage, MapPage mapPage)
+    public AppShell(IAuthService authService, LoginPage loginPage, MapPage mapPage)
     {
         _authService = authService;
         InitializeComponent();
@@ -24,19 +24,14 @@ public partial class AppShell : Shell
 
         Items.Add(new ShellContent
         {
-            Title = "Home",
-            Route = "HomePage",
-            Content = homePage,
-            FlyoutItemIsVisible = false
-        });
-
-        Items.Add(new ShellContent
-        {
             Title = "Map",
             Route = "MapPage",
             Content = mapPage,
             FlyoutItemIsVisible = false
         });
+
+        // Settings is pushed onto the navigation stack from the map toolbar.
+        Routing.RegisterRoute(nameof(SettingsPage), typeof(SettingsPage));
 
         Loaded += OnShellLoaded;
     }
@@ -51,7 +46,7 @@ public partial class AppShell : Shell
         try
         {
             if (_authService.IsSignedIn)
-                await GoToAsync("//HomePage");
+                await GoToAsync("//MapPage");
             else
                 await GoToAsync("//LoginPage");
         }

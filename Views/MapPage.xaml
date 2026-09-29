@@ -2,56 +2,108 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="WhereUAtNative.Views.MapPage"
-             Title="Map"
-             BackgroundColor="#1C1C1E">
+             Title="Where U At"
+             BackgroundColor="#1C1C1E"
+             Shell.NavBarIsVisible="True">
 
     <ContentPage.ToolbarItems>
-        <ToolbarItem Text="Home"
-                     Command="{Binding GoHomeCommand}" />
+        <ToolbarItem Text="Settings"
+                     Order="Primary"
+                     Priority="0"
+                     Command="{Binding OpenSettingsCommand}" />
     </ContentPage.ToolbarItems>
 
-    <Grid RowDefinitions="Auto,*">
-        <Border Grid.Row="0"
-                Stroke="#3A3A3C"
-                StrokeThickness="1"
-                BackgroundColor="#2C2C2E"
-                Padding="16"
-                Margin="12">
-            <VerticalStackLayout Spacing="6">
+    <Grid>
+        <!-- Full-bleed OSM Leaflet map -->
+        <WebView x:Name="MapWebView"
+                 Navigated="OnMapWebViewNavigated" />
+
+        <!-- Soft empty-state overlay (map still behind) -->
+        <Border IsVisible="{Binding ShowEmptyOverlay}"
+                BackgroundColor="#CC1C1C1E"
+                StrokeThickness="0"
+                Padding="28"
+                VerticalOptions="Center"
+                HorizontalOptions="Center"
+                Margin="32,0"
+                MaximumWidthRequest="360"
+                StrokeShape="RoundRectangle 16">
+            <VerticalStackLayout Spacing="10">
                 <Label Text="{Binding StatusMessage}"
-                       FontSize="14"
+                       FontSize="15"
+                       HorizontalTextAlignment="Center"
                        TextColor="#E5E5EA"
                        LineBreakMode="WordWrap" />
-                <Label Text="Map tiles: OpenStreetMap via Leaflet. Tap a marker to lock/follow."
-                       FontSize="11"
+                <Label Text="Use the pin button to share · Settings for family"
+                       FontSize="12"
+                       HorizontalTextAlignment="Center"
                        TextColor="#8E8E93"
                        LineBreakMode="WordWrap" />
             </VerticalStackLayout>
         </Border>
 
-        <Grid Grid.Row="1">
-            <WebView x:Name="MapWebView"
-                     IsVisible="{Binding HasMapContent}"
-                     Navigated="OnMapWebViewNavigated" />
+        <!-- Compact status chip when map has content -->
+        <Border IsVisible="{Binding HasMapContent}"
+                Stroke="#3A3A3C"
+                StrokeThickness="1"
+                BackgroundColor="#E62C2C2E"
+                StrokeShape="RoundRectangle 12"
+                Padding="12,8"
+                Margin="12,12,72,0"
+                VerticalOptions="Start"
+                HorizontalOptions="Fill">
+            <Label Text="{Binding StatusMessage}"
+                   FontSize="12"
+                   TextColor="#E5E5EA"
+                   LineBreakMode="TailTruncation"
+                   MaxLines="2" />
+        </Border>
 
-            <VerticalStackLayout IsVisible="{Binding ShowEmptyMessage}"
-                                 VerticalOptions="Center"
-                                 HorizontalOptions="Center"
-                                 Padding="24"
-                                 Spacing="12">
-                <Label Text="{Binding StatusMessage}"
-                       FontSize="16"
-                       HorizontalTextAlignment="Center"
-                       TextColor="#AEAEB2"
-                       LineBreakMode="WordWrap" />
-                <Button Text="Back to Home"
-                        Command="{Binding GoHomeCommand}"
-                        BackgroundColor="#4CAF50"
-                        TextColor="White"
-                        CornerRadius="8"
-                        HeightRequest="44"
-                        HorizontalOptions="Center" />
-            </VerticalStackLayout>
-        </Grid>
+        <!-- Toggle hint (permission / GPS) -->
+        <Border IsVisible="{Binding IsToggleHintVisible}"
+                StrokeThickness="0"
+                BackgroundColor="#E62C2C2E"
+                StrokeShape="RoundRectangle 10"
+                Padding="12,8"
+                Margin="12,0,72,100"
+                VerticalOptions="End"
+                HorizontalOptions="Fill">
+            <Label Text="{Binding ToggleHint}"
+                   FontSize="12"
+                   TextColor="#FFB74D"
+                   LineBreakMode="WordWrap" />
+        </Border>
+
+        <!-- Right-side FAB stack: location (mid) above sign-out (bottom) -->
+        <VerticalStackLayout HorizontalOptions="End"
+                             VerticalOptions="End"
+                             Margin="0,0,18,28"
+                             Spacing="14">
+
+            <!-- Location sharing FAB -->
+            <Button WidthRequest="58"
+                    HeightRequest="58"
+                    CornerRadius="29"
+                    Padding="0"
+                    FontSize="22"
+                    Text="{Binding SharingFabLabel}"
+                    TextColor="{Binding SharingFabTextColor}"
+                    BackgroundColor="{Binding SharingFabColor}"
+                    Command="{Binding ToggleSharingCommand}"
+                    SemanticProperties.Description="Toggle location sharing" />
+
+            <!-- Sign out FAB — subtler / smaller -->
+            <Button WidthRequest="44"
+                    HeightRequest="44"
+                    CornerRadius="22"
+                    Padding="0"
+                    FontSize="11"
+                    FontAttributes="Bold"
+                    Text="Out"
+                    TextColor="#E5E5EA"
+                    BackgroundColor="#3A3A3C"
+                    Command="{Binding SignOutCommand}"
+                    SemanticProperties.Description="Sign out" />
+        </VerticalStackLayout>
     </Grid>
 </ContentPage>
