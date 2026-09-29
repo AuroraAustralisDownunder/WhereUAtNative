@@ -62,19 +62,13 @@ Location is **local-only** in this build:
 6. Use the toolbar **Map** item — with sharing on and a fix, you should see a **You** pin; with sharing off, an empty-state message instead.
 7. Turn sharing **Off** — updates stop and status returns to **Off**.
 
-## Maps / Google Maps API key (Android)
+## Maps (OpenStreetMap)
 
-The map UI uses `Microsoft.Maui.Controls.Maps` (Apple Maps on iOS; Google Maps on Android).
+The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles (`Resources/Raw/map.html`). No Google Maps API key is required on any platform.
 
-**Android map tiles are blank without a Google Maps API key.** Uncomment and set the key in `Platforms/Android/AndroidManifest.xml` inside `<application>`:
-
-```xml
-<meta-data android:name="com.google.android.geo.API_KEY" android:value="YOUR_KEY_HERE" />
-```
-
-Create a Maps SDK for Android key in Google Cloud (restrict it to `com.familytracker.whereuat`). iOS does not need that key for the built-in MapKit-backed control.
-
-Home still shows rounded coordinates even if the Android map is blank, so login + toggle testing does not depend on the key.
+- Pin is shown only when location sharing is on and a GPS fix exists.
+- Otherwise the map page shows an empty-state message (same privacy rules as before).
+- Leaflet JS/CSS load from the unpkg CDN; OSM tiles need network access (`INTERNET` permission already declared).
 
 ## Privacy defaults (this release)
 
@@ -91,6 +85,5 @@ Home still shows rounded coordinates even if the Android map is blank, so login 
 
 ## Next up
 
-- Optional Google Maps API key wiring for Android CI builds
 - Sharing locations with family (Firestore) — still opt-in
 - Background tracking only if product explicitly requires it
