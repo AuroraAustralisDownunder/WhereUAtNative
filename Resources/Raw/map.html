@@ -112,8 +112,8 @@
   </style>
 </head>
 <body>
-  <div id="empty" class="empty visible">Turn on location sharing to see yourself on the map.</div>
-  <div id="map" class="hidden"></div>
+  <div id="empty" class="empty">Turn on location sharing to see yourself on the map.</div>
+  <div id="map"></div>
   <div id="lock-bar">
     <span id="lock-label">Locked</span>
     <button type="button" id="unlock-btn">Unlock</button>
@@ -239,13 +239,12 @@
       }
 
       function showMapIfNeeded() {
+        ensureMap();
+        emptyEl.classList.remove('visible');
         if (Object.keys(users).length === 0) {
-          mapEl.classList.add('hidden');
-          emptyEl.classList.add('visible');
           lockBar.classList.remove('visible');
           return false;
         }
-        ensureMap();
         return true;
       }
 
@@ -298,9 +297,7 @@
         delete users[id];
         if (lockedUserId === id) unlock();
         if (Object.keys(users).length === 0) {
-          mapEl.classList.add('hidden');
-          emptyEl.textContent = 'Turn on location sharing to see yourself on the map.';
-          emptyEl.classList.add('visible');
+          emptyEl.classList.remove('visible');
           lockBar.classList.remove('visible');
         }
       };
@@ -340,9 +337,9 @@
 
       window.clearPin = function (message) {
         window.clearUsers();
-        mapEl.classList.add('hidden');
-        emptyEl.textContent = message || 'Turn on location sharing to see yourself on the map.';
-        emptyEl.classList.add('visible');
+        ensureMap();
+        emptyEl.classList.remove('visible');
+        // Keep OSM tiles visible; native soft overlay shows the empty-state message.
       };
 
       window.showEmpty = function (message) {
@@ -352,12 +349,13 @@
       window.lockUser = function (id) { setLock(String(id)); };
       window.unlockUser = function () { unlock(); };
 
-      // Query-string bootstrap: ?lat=&lon= or ?empty=1&msg=
+      // Always show tiles; native UI owns empty-state messaging.
+      ensureMap();
+
+      // Query-string bootstrap: ?lat=&lon=
       try {
         var params = new URLSearchParams(window.location.search || '');
-        if (params.get('empty') === '1') {
-          window.clearPin(params.get('msg') || 'Turn on location sharing to see yourself on the map.');
-        } else if (params.has('lat') && params.has('lon')) {
+        if (params.has('lat') && params.has('lon')) {
           window.setPin(params.get('lat'), params.get('lon'));
         }
       } catch (e) { /* ignore */ }

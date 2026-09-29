@@ -46,13 +46,14 @@ public static class MauiProgram
         builder.Services.AddSingleton<LocationSyncService>();
 
         builder.Services.AddTransient<LoginViewModel>();
-        builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<MapViewModel>();
+        builder.Services.AddTransient<SettingsViewModel>();
 
         // Shell root pages are created once and kept for the app session.
         builder.Services.AddSingleton<LoginPage>();
-        builder.Services.AddSingleton<HomePage>();
         builder.Services.AddSingleton<MapPage>();
+        // Settings is pushed via Routing.RegisterRoute — resolve from DI.
+        builder.Services.AddTransient<SettingsPage>();
 
         builder.Services.AddSingleton<AppShell>();
     }

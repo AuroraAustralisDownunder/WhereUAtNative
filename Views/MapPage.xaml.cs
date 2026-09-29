@@ -44,7 +44,8 @@ public partial class MapPage : ContentPage
             or nameof(MapViewModel.PinLatitude)
             or nameof(MapViewModel.PinLongitude)
             or nameof(MapViewModel.HasMapContent)
-            or nameof(MapViewModel.StatusMessage))
+            or nameof(MapViewModel.StatusMessage)
+            or nameof(MapViewModel.ShowEmptyOverlay))
         {
             MainThread.BeginInvokeOnMainThread(async () => await SyncMapFromViewModelAsync());
         }
@@ -72,7 +73,7 @@ public partial class MapPage : ContentPage
             System.Diagnostics.Debug.WriteLine($"Failed to load map.html: {ex.Message}");
             MapWebView.Source = new HtmlWebViewSource
             {
-                Html = "<html><body style='font-family:sans-serif;padding:24px;color:#555'>Map assets failed to load.</body></html>"
+                Html = "<html><body style='font-family:sans-serif;padding:24px;color:#555;background:#1C1C1E'>Map assets failed to load.</body></html>"
             };
         }
     }
@@ -93,6 +94,7 @@ public partial class MapPage : ContentPage
         {
             if (!_viewModel.HasMapContent)
             {
+                // Keep tiles visible under soft overlay; clear markers only.
                 var msg = EscapeJs(_viewModel.StatusMessage);
                 await MapWebView.EvaluateJavaScriptAsync($"clearPin('{msg}')");
                 _renderedFamilyIds.Clear();

@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.0` (versionCode `3`) |
+| Display version | `0.2.1` (versionCode `4`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -33,17 +33,17 @@ Create (or use) a **Firebase Authentication** email/password user in the `whereu
 
 1. Launch on a device or emulator.
 2. Sign in with the Firebase email/password user.
-3. You should land on Home with welcome text and Sign out.
+3. You should land straight on the **Map** (full-bleed OSM). Use the green pin FAB to share location, **Out** to sign out, and **Settings** for family/account.
 
 ## Location sharing (opt-in)
 
 - Sharing defaults to **Off** (device preference `location_sharing_enabled` = false).
-- The Home switch **Share my location** requests **when-in-use** permission, then reads GPS.
-- Coords shown on Home/Map are rounded (~4 decimal places) for a privacy-friendly display.
+- The map **pin FAB** (mid-right) toggles Share my location — green when on, muted when off. It requests **when-in-use** permission, then reads GPS.
+- Coords shown on the map status chip / Settings are rounded (~4 decimal places) for a privacy-friendly display.
 - While sharing is on **and** you are in a family, the app writes your live position to Firebase Realtime Database under `families/{code}/locations/{uid}` (foreground only).
 - Turning sharing **Off**, leaving the family, or signing out removes your published location.
-- Sign-out turns sharing off again for a clean next session.
-- While sharing is on and Home is visible, position refreshes about every 30 seconds.
+- Sign-out (smaller **Out** FAB) turns sharing off again for a clean next session.
+- Family create/join/leave, privacy notes, and account email live under **Settings**.
 
 ### Permissions
 
@@ -58,10 +58,10 @@ Privacy-first: **location is only uploaded when that user has Share my location 
 
 ### How to create / join (testing)
 
-1. Sign in as user A → Home → **Family** → **Create family**. Note the **6-character code**.
-2. Sign in as user B (second device/emulator or after sign-out) → enter the code → **Join family**.
-3. Both users turn **Share my location** On and grant when-in-use permission.
-4. Open **Map** — you should see yourself and the other sharing member(s). Tap a marker to lock/follow (neighbourhood zoom ~16).
+1. Sign in as user A → **Settings** → **Create family**. Note the **6-character code**.
+2. Sign in as user B (second device/emulator or after sign-out) → **Settings** → enter the code → **Join family**.
+3. Both users tap the map **pin FAB** to turn sharing On and grant when-in-use permission.
+4. Stay on the Map — you should see yourself and the other sharing member(s). Tap a marker to lock/follow (neighbourhood zoom ~16).
 
 ### Data model (Realtime Database)
 

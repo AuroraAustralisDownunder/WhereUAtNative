@@ -14,11 +14,15 @@ public class MapViewModel : INotifyPropertyChanged
     private readonly IFamilyService _familyService;
     private readonly IAuthService _authService;
 
-    private string _statusMessage = "Turn on location sharing or join a family to see the map.";
+    private string _statusMessage = "Tap the pin to share your location, or open Settings to join a family.";
     private bool _hasSelfPin;
     private double _pinLatitude;
     private double _pinLongitude;
     private int _familyMarkerCount;
+    private bool _isSharingEnabled;
+    private bool _isToggling;
+    private bool _isBusy;
+    private string? _toggleHint;
     private CancellationTokenSource? _pollCts;
     private bool _isPageVisible;
 
@@ -40,7 +44,7 @@ public class MapViewModel : INotifyPropertyChanged
             _hasSelfPin = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasMapContent));
-            OnPropertyChanged(nameof(ShowEmptyMessage));
+            OnPropertyChanged(nameof(ShowEmptyOverlay));
         }
     }
 
@@ -52,13 +56,14 @@ public class MapViewModel : INotifyPropertyChanged
             _familyMarkerCount = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasMapContent));
-            OnPropertyChanged(nameof(ShowEmptyMessage));
+            OnPropertyChanged(nameof(ShowEmptyOverlay));
         }
     }
 
     public bool HasMapContent => HasSelfPin || FamilyMarkerCount > 0;
 
-    public bool ShowEmptyMessage => !HasMapContent;
+    /// <summary>Soft overlay on the live map when nothing to show yet.</summary>
+    public bool ShowEmptyOverlay => !HasMapContent;
 
     public double PinLatitude
     {
@@ -72,21 +77,71 @@ public class MapViewModel : INotifyPropertyChanged
         set { _pinLongitude = value; OnPropertyChanged(); }
     }
 
+    public bool IsSharingEnabled
+    {
+        get => _isSharingEnabled;
+        private set
+        {
+            if (_isSharingEnabled == value)
+                return;
+            _isSharingEnabled = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SharingFabColor));
+            OnPropertyChanged(nameof(SharingFabTextColor));
+            OnPropertyChanged(nameof(SharingFabLabel));
+        }
+    }
+
+    /// <summary>Green when sharing on; muted grey when off.</summary>
+    public Color SharingFabColor => IsSharingEnabled
+        ? Color.FromArgb("#4CAF50")
+        : Color.FromArgb("#636366");
+
+    public Color SharingFabTextColor => Colors.White;
+
+    public string SharingFabLabel => IsSharingEnabled ? "📍" : "📍";
+
+    public string? ToggleHint
+    {
+        get => _toggleHint;
+        set
+        {
+            _toggleHint = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsToggleHintVisible));
+        }
+    }
+
+    public bool IsToggleHintVisible => !string.IsNullOrWhiteSpace(ToggleHint);
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            _isBusy = value;
+            OnPropertyChanged();
+            ((Command)SignOutCommand).ChangeCanExecute();
+            ((Command)ToggleSharingCommand).ChangeCanExecute();
+        }
+    }
+
     /// <summary>Raised when family marker set changes so the page can sync the WebView.</summary>
     public event EventHandler? MarkersChanged;
 
-    public ICommand GoHomeCommand { get; }
+    public ICommand ToggleSharingCommand { get; }
+    public ICommand SignOutCommand { get; }
+    public ICommand OpenSettingsCommand { get; }
 
     public MapViewModel(ILocationService locationService, IFamilyService familyService, IAuthService authService)
     {
         _locationService = locationService;
         _familyService = familyService;
         _authService = authService;
-        GoHomeCommand = new Command(async () =>
-        {
-            try { await Shell.Current.GoToAsync("//HomePage"); }
-            catch { /* ignore */ }
-        });
+        ToggleSharingCommand = new Command(async () => await ToggleSharingAsync(), () => !IsBusy && !_isToggling);
+        SignOutCommand = new Command(async () => await SignOutAsync(), () => !IsBusy);
+        OpenSettingsCommand = new Command(async () => await OpenSettingsAsync());
+        IsSharingEnabled = _locationService.IsSharingEnabled;
     }
 
     public async Task OnAppearingAsync()
@@ -94,6 +149,8 @@ public class MapViewModel : INotifyPropertyChanged
         _isPageVisible = true;
         _locationService.PositionChanged -= OnPositionChanged;
         _locationService.PositionChanged += OnPositionChanged;
+
+        IsSharingEnabled = _locationService.IsSharingEnabled;
 
         await _familyService.RefreshMembershipAsync();
 
@@ -120,10 +177,93 @@ public class MapViewModel : INotifyPropertyChanged
         StopFamilyPoll();
     }
 
+    private async Task ToggleSharingAsync()
+    {
+        if (_isToggling || IsBusy)
+            return;
+
+        _isToggling = true;
+        ((Command)ToggleSharingCommand).ChangeCanExecute();
+        try
+        {
+            if (_locationService.IsSharingEnabled)
+            {
+                await _locationService.DisableSharingAsync();
+                await _familyService.ClearPublishedLocationAsync();
+                IsSharingEnabled = false;
+                ClearSelfPin();
+                ToggleHint = null;
+                UpdateStatusMessage();
+            }
+            else
+            {
+                ToggleHint = null;
+                StatusMessage = "Requesting permission…";
+                var (success, message) = await _locationService.EnableSharingAsync();
+                IsSharingEnabled = _locationService.IsSharingEnabled;
+
+                if (!success)
+                {
+                    ToggleHint = message;
+                    UpdateStatusMessage();
+                    return;
+                }
+
+                ToggleHint = message;
+                var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
+                ApplySelfLocation(location);
+                UpdateStatusMessage();
+            }
+        }
+        finally
+        {
+            _isToggling = false;
+            ((Command)ToggleSharingCommand).ChangeCanExecute();
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            StopFamilyPoll();
+            if (_locationService.IsSharingEnabled)
+                await _locationService.DisableSharingAsync();
+            await _familyService.ClearPublishedLocationAsync();
+            IsSharingEnabled = false;
+            ClearSelfPin();
+            ToggleHint = null;
+
+            await _authService.SignOutAsync();
+            await Shell.Current.GoToAsync("//LoginPage");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task OpenSettingsAsync()
+    {
+        try
+        {
+            await Shell.Current.GoToAsync("SettingsPage");
+        }
+        catch
+        {
+            // ignore navigation failures
+        }
+    }
+
     private void OnPositionChanged(object? sender, Location? location)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
+            IsSharingEnabled = _locationService.IsSharingEnabled;
             ApplySelfLocation(location);
             UpdateStatusMessage();
         });
@@ -139,7 +279,6 @@ public class MapViewModel : INotifyPropertyChanged
 
         if (location is null)
         {
-            // Keep previous self pin if we had one; only clear when sharing is off.
             if (!HasSelfPin)
                 StatusMessage = "Waiting for GPS…";
             return;
@@ -165,7 +304,6 @@ public class MapViewModel : INotifyPropertyChanged
 
             foreach (var loc in locations)
             {
-                // Self is rendered via setPin / id "self" — skip duplicate uid marker.
                 if (!string.IsNullOrEmpty(selfUid) && loc.Uid == selfUid)
                     continue;
 
@@ -187,9 +325,9 @@ public class MapViewModel : INotifyPropertyChanged
         if (!HasMapContent)
         {
             if (!string.IsNullOrEmpty(_familyService.CurrentFamilyId))
-                StatusMessage = "No live locations yet. Turn on Share my location, or wait for family.";
+                StatusMessage = "No live locations yet. Tap the pin to share, or wait for family.";
             else
-                StatusMessage = "Turn on location sharing or join a family to see the map.";
+                StatusMessage = "Tap the pin to share your location, or open Settings to join a family.";
             return;
         }
 
@@ -216,7 +354,6 @@ public class MapViewModel : INotifyPropertyChanged
         if (!_isPageVisible)
             return;
 
-        // Poll even without a family so joining mid-session still works after RefreshMembership.
         _pollCts = new CancellationTokenSource();
         var token = _pollCts.Token;
         _ = RunFamilyPollAsync(token);
@@ -233,7 +370,11 @@ public class MapViewModel : INotifyPropertyChanged
                     break;
 
                 await RefreshFamilyMarkersAsync();
-                MainThread.BeginInvokeOnMainThread(UpdateStatusMessage);
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    IsSharingEnabled = _locationService.IsSharingEnabled;
+                    UpdateStatusMessage();
+                });
             }
         }
         catch (OperationCanceledException)
