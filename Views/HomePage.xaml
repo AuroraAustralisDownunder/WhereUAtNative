@@ -5,6 +5,11 @@
              Title="Where U At"
              BackgroundColor="#F7F9FC">
 
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Map"
+                     Command="{Binding OpenMapCommand}" />
+    </ContentPage.ToolbarItems>
+
     <ScrollView>
         <VerticalStackLayout Spacing="20"
                              Padding="30"
@@ -33,7 +38,7 @@
                            FontAttributes="Bold"
                            FontSize="16"
                            TextColor="#1A1A2E" />
-                    <Label Text="Your location is never shared unless you turn it on."
+                    <Label Text="{Binding PrivacyReminder}"
                            FontSize="14"
                            TextColor="#555555"
                            LineBreakMode="WordWrap" />
@@ -45,14 +50,39 @@
                     StrokeShape="RoundRectangle 12"
                     BackgroundColor="#FFFFFF"
                     Padding="16">
-                <VerticalStackLayout Spacing="8">
+                <VerticalStackLayout Spacing="12">
                     <Label Text="Location sharing"
                            FontAttributes="Bold"
                            FontSize="16"
                            TextColor="#1A1A2E" />
-                    <Label Text="Coming next — off by default."
+
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="12">
+                        <Label Grid.Column="0"
+                               Text="Share my location"
+                               FontSize="15"
+                               VerticalOptions="Center"
+                               TextColor="#333333" />
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding IsSharingEnabled, Mode=TwoWay}"
+                                OnColor="#4CAF50"
+                                VerticalOptions="Center" />
+                    </Grid>
+
+                    <Label Text="{Binding LocationStatusText}"
                            FontSize="14"
                            TextColor="#555555"
+                           LineBreakMode="WordWrap" />
+
+                    <Label Text="{Binding LocationHint}"
+                           FontSize="13"
+                           TextColor="#E65100"
+                           IsVisible="{Binding IsLocationHintVisible}"
+                           LineBreakMode="WordWrap" />
+
+                    <Label Text="Tip: open Map from the toolbar to see yourself when sharing is on."
+                           FontSize="12"
+                           TextColor="#888888"
                            LineBreakMode="WordWrap" />
                 </VerticalStackLayout>
             </Border>

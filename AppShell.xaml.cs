@@ -8,7 +8,7 @@ public partial class AppShell : Shell
     private readonly IAuthService _authService;
     private bool _startupNavigationDone;
 
-    public AppShell(IAuthService authService, LoginPage loginPage, HomePage homePage)
+    public AppShell(IAuthService authService, LoginPage loginPage, HomePage homePage, MapPage mapPage)
     {
         _authService = authService;
         InitializeComponent();
@@ -27,6 +27,14 @@ public partial class AppShell : Shell
             Title = "Home",
             Route = "HomePage",
             Content = homePage,
+            FlyoutItemIsVisible = false
+        });
+
+        Items.Add(new ShellContent
+        {
+            Title = "Map",
+            Route = "MapPage",
+            Content = mapPage,
             FlyoutItemIsVisible = false
         });
 

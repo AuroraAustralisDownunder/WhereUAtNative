@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Controls.Hosting;
 using Microsoft.Maui.LifecycleEvents;
 using WhereUAtNative.Services;
 using WhereUAtNative.ViewModels;
@@ -19,6 +20,7 @@ public static class MauiProgram
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
+            .UseMauiMaps()
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -38,13 +40,16 @@ public static class MauiProgram
     private static void RegisterAppServices(MauiAppBuilder builder)
     {
         builder.Services.AddSingleton<IAuthService, FirebaseAuthService>();
+        builder.Services.AddSingleton<ILocationService, LocationService>();
 
         builder.Services.AddTransient<LoginViewModel>();
         builder.Services.AddTransient<HomeViewModel>();
+        builder.Services.AddTransient<MapViewModel>();
 
         // Shell root pages are created once and kept for the app session.
         builder.Services.AddSingleton<LoginPage>();
         builder.Services.AddSingleton<HomePage>();
+        builder.Services.AddSingleton<MapPage>();
 
         builder.Services.AddSingleton<AppShell>();
     }

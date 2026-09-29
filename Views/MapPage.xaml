@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"
+             x:Class="WhereUAtNative.Views.MapPage"
+             Title="Map"
+             BackgroundColor="#F7F9FC">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Home"
+                     Command="{Binding GoHomeCommand}" />
+    </ContentPage.ToolbarItems>
+
+    <Grid RowDefinitions="Auto,*">
+        <Border Grid.Row="0"
+                Stroke="#E0E6ED"
+                StrokeThickness="1"
+                BackgroundColor="#FFFFFF"
+                Padding="16"
+                Margin="12">
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{Binding StatusMessage}"
+                       FontSize="14"
+                       TextColor="#333333"
+                       LineBreakMode="WordWrap" />
+                <Label Text="Android map tiles need a Google Maps API key (see README). iOS uses Apple Maps."
+                       FontSize="11"
+                       TextColor="#888888"
+                       LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <maps:Map x:Name="UserMap"
+                      IsShowingUser="False"
+                      IsScrollEnabled="True"
+                      IsZoomEnabled="True"
+                      IsVisible="{Binding HasPin}" />
+
+            <VerticalStackLayout IsVisible="{Binding ShowEmptyMessage}"
+                                 VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 Padding="24"
+                                 Spacing="12">
+                <Label Text="{Binding StatusMessage}"
+                       FontSize="16"
+                       HorizontalTextAlignment="Center"
+                       TextColor="#555555"
+                       LineBreakMode="WordWrap" />
+                <Button Text="Back to Home"
+                        Command="{Binding GoHomeCommand}"
+                        BackgroundColor="#4CAF50"
+                        TextColor="White"
+                        CornerRadius="8"
+                        HeightRequest="44"
+                        HorizontalOptions="Center" />
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>
