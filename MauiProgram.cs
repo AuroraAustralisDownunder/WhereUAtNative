@@ -4,7 +4,6 @@ using Microsoft.Maui.LifecycleEvents;
 using WhereUAtNative.Services;
 using WhereUAtNative.ViewModels;
 using WhereUAtNative.Views;
-using Plugin.Firebase;
 #if IOS
 using Plugin.Firebase.Core.Platforms.iOS;
 #elif ANDROID
