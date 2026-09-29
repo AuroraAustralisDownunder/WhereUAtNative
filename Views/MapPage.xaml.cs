@@ -17,6 +17,7 @@ public partial class MapPage : ContentPage
         BindingContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         _viewModel.MarkersChanged += OnMarkersChanged;
+        MapWebView.Navigating += OnMapWebViewNavigating;
     }
 
     protected override async void OnAppearing()
@@ -58,6 +59,20 @@ public partial class MapPage : ContentPage
             await SyncMapFromViewModelAsync();
     }
 
+    /// <summary>
+    /// Map loads local HTML only (HtmlWebViewSource). Block top-level http(s) navigations
+    /// (e.g. attribution clicks). Leaflet/OSM CDN + tiles are subresources, not navigations.
+    /// </summary>
+    private void OnMapWebViewNavigating(object? sender, WebNavigatingEventArgs e)
+    {
+        var url = e.Url ?? string.Empty;
+        if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            e.Cancel = true;
+        }
+    }
+
     private async Task EnsureMapLoadedAsync()
     {
         if (MapWebView.Source is not null && _cachedHtml is not null)
@@ -70,7 +85,7 @@ public partial class MapPage : ContentPage
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load map.html: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine("Failed to load map.html from app package.");
             MapWebView.Source = new HtmlWebViewSource
             {
                 Html = "<html><body style='font-family:sans-serif;padding:24px;color:#555;background:#1C1C1E'>Map assets failed to load.</body></html>"
