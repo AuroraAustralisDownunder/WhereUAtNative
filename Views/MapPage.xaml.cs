@@ -8,6 +8,7 @@ public partial class MapPage : ContentPage
     private readonly MapViewModel _viewModel;
     private bool _mapReady;
     private string? _cachedHtml;
+    private readonly HashSet<string> _renderedFamilyIds = new(StringComparer.Ordinal);
 
     public MapPage(MapViewModel viewModel)
     {
@@ -15,6 +16,7 @@ public partial class MapPage : ContentPage
         _viewModel = viewModel;
         BindingContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        _viewModel.MarkersChanged += OnMarkersChanged;
     }
 
     protected override async void OnAppearing()
@@ -22,7 +24,7 @@ public partial class MapPage : ContentPage
         base.OnAppearing();
         await EnsureMapLoadedAsync();
         await _viewModel.OnAppearingAsync();
-        await SyncPinFromViewModelAsync();
+        await SyncMapFromViewModelAsync();
     }
 
     protected override void OnDisappearing()
@@ -31,14 +33,20 @@ public partial class MapPage : ContentPage
         base.OnDisappearing();
     }
 
+    private void OnMarkersChanged(object? sender, EventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(async () => await SyncFamilyMarkersAsync());
+    }
+
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MapViewModel.HasPin)
+        if (e.PropertyName is nameof(MapViewModel.HasSelfPin)
             or nameof(MapViewModel.PinLatitude)
             or nameof(MapViewModel.PinLongitude)
+            or nameof(MapViewModel.HasMapContent)
             or nameof(MapViewModel.StatusMessage))
         {
-            MainThread.BeginInvokeOnMainThread(async () => await SyncPinFromViewModelAsync());
+            MainThread.BeginInvokeOnMainThread(async () => await SyncMapFromViewModelAsync());
         }
     }
 
@@ -46,7 +54,7 @@ public partial class MapPage : ContentPage
     {
         _mapReady = e.Result == WebNavigationResult.Success;
         if (_mapReady)
-            await SyncPinFromViewModelAsync();
+            await SyncMapFromViewModelAsync();
     }
 
     private async Task EnsureMapLoadedAsync()
@@ -76,27 +84,69 @@ public partial class MapPage : ContentPage
         return await reader.ReadToEndAsync();
     }
 
-    private async Task SyncPinFromViewModelAsync()
+    private async Task SyncMapFromViewModelAsync()
     {
         if (!_mapReady)
             return;
 
         try
         {
-            if (!_viewModel.HasPin)
+            if (!_viewModel.HasMapContent)
             {
                 var msg = EscapeJs(_viewModel.StatusMessage);
                 await MapWebView.EvaluateJavaScriptAsync($"clearPin('{msg}')");
+                _renderedFamilyIds.Clear();
                 return;
             }
 
-            var lat = _viewModel.PinLatitude.ToString(CultureInfo.InvariantCulture);
-            var lon = _viewModel.PinLongitude.ToString(CultureInfo.InvariantCulture);
-            await MapWebView.EvaluateJavaScriptAsync($"setPin({lat}, {lon})");
+            if (_viewModel.HasSelfPin)
+            {
+                var lat = _viewModel.PinLatitude.ToString(CultureInfo.InvariantCulture);
+                var lon = _viewModel.PinLongitude.ToString(CultureInfo.InvariantCulture);
+                await MapWebView.EvaluateJavaScriptAsync($"setPin({lat}, {lon})");
+            }
+            else
+            {
+                await MapWebView.EvaluateJavaScriptAsync("removeUser('self')");
+            }
+
+            await SyncFamilyMarkersAsync();
         }
         catch
         {
             // WebView may not be ready yet — ignore.
+        }
+    }
+
+    private async Task SyncFamilyMarkersAsync()
+    {
+        if (!_mapReady)
+            return;
+
+        try
+        {
+            var current = _viewModel.FamilyMarkers;
+            var nextIds = new HashSet<string>(current.Keys, StringComparer.Ordinal);
+
+            foreach (var stale in _renderedFamilyIds.Where(id => !nextIds.Contains(id)).ToList())
+            {
+                await MapWebView.EvaluateJavaScriptAsync($"removeUser('{EscapeJs(stale)}')");
+                _renderedFamilyIds.Remove(stale);
+            }
+
+            foreach (var (id, (lat, lon, label)) in current)
+            {
+                var latS = lat.ToString(CultureInfo.InvariantCulture);
+                var lonS = lon.ToString(CultureInfo.InvariantCulture);
+                var labelS = EscapeJs(label);
+                var idS = EscapeJs(id);
+                await MapWebView.EvaluateJavaScriptAsync($"upsertUser('{idS}', {latS}, {lonS}, '{labelS}')");
+                _renderedFamilyIds.Add(id);
+            }
+        }
+        catch
+        {
+            // ignore WebView race
         }
     }
 

@@ -32,13 +32,18 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        return builder.Build();
+        var app = builder.Build();
+        // Start forwarding opt-in GPS → family RTDB (no-op until sharing + family).
+        app.Services.GetRequiredService<LocationSyncService>().Start();
+        return app;
     }
 
     private static void RegisterAppServices(MauiAppBuilder builder)
     {
         builder.Services.AddSingleton<IAuthService, FirebaseAuthService>();
         builder.Services.AddSingleton<ILocationService, LocationService>();
+        builder.Services.AddSingleton<IFamilyService, FirebaseFamilyService>();
+        builder.Services.AddSingleton<LocationSyncService>();
 
         builder.Services.AddTransient<LoginViewModel>();
         builder.Services.AddTransient<HomeViewModel>();

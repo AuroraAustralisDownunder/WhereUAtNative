@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
@@ -12,6 +13,7 @@ public class HomeViewModel : INotifyPropertyChanged
 
     private readonly IAuthService _authService;
     private readonly ILocationService _locationService;
+    private readonly IFamilyService _familyService;
 
     private string _welcomeText = "Signed in";
     private bool _isBusy;
@@ -21,6 +23,12 @@ public class HomeViewModel : INotifyPropertyChanged
     private string? _locationHint;
     private CancellationTokenSource? _refreshCts;
     private bool _isPageVisible;
+
+    private string? _familyCode;
+    private string _familyStatusText = "Not in a family yet.";
+    private string? _familyHint;
+    private string _joinCodeInput = string.Empty;
+    private bool _isInFamily;
 
     public string WelcomeText
     {
@@ -37,6 +45,9 @@ public class HomeViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsNotBusy));
             ((Command)SignOutCommand).ChangeCanExecute();
+            ((Command)CreateFamilyCommand).ChangeCanExecute();
+            ((Command)JoinFamilyCommand).ChangeCanExecute();
+            ((Command)LeaveFamilyCommand).ChangeCanExecute();
         }
     }
 
@@ -75,21 +86,75 @@ public class HomeViewModel : INotifyPropertyChanged
     public bool IsLocationHintVisible => !string.IsNullOrWhiteSpace(LocationHint);
 
     public string PrivacyReminder { get; } =
-        "Location is off by default. Nothing is uploaded in this build — sharing stays on this device until a later release.";
+        "Location is off by default. Your position is uploaded only while Share my location is ON and you belong to a family — and only to that family’s private location node.";
+
+    public bool IsInFamily
+    {
+        get => _isInFamily;
+        private set
+        {
+            _isInFamily = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsNotInFamily));
+        }
+    }
+
+    public bool IsNotInFamily => !IsInFamily;
+
+    public string? FamilyCode
+    {
+        get => _familyCode;
+        private set { _familyCode = value; OnPropertyChanged(); }
+    }
+
+    public string FamilyStatusText
+    {
+        get => _familyStatusText;
+        set { _familyStatusText = value; OnPropertyChanged(); }
+    }
+
+    public string? FamilyHint
+    {
+        get => _familyHint;
+        set
+        {
+            _familyHint = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsFamilyHintVisible));
+        }
+    }
+
+    public bool IsFamilyHintVisible => !string.IsNullOrWhiteSpace(FamilyHint);
+
+    public string JoinCodeInput
+    {
+        get => _joinCodeInput;
+        set { _joinCodeInput = value; OnPropertyChanged(); }
+    }
+
+    public ObservableCollection<string> MemberLabels { get; } = new();
 
     public ICommand SignOutCommand { get; }
     public ICommand OpenMapCommand { get; }
+    public ICommand CreateFamilyCommand { get; }
+    public ICommand JoinFamilyCommand { get; }
+    public ICommand LeaveFamilyCommand { get; }
 
-    public HomeViewModel(IAuthService authService, ILocationService locationService)
+    public HomeViewModel(IAuthService authService, ILocationService locationService, IFamilyService familyService)
     {
         _authService = authService;
         _locationService = locationService;
+        _familyService = familyService;
         SignOutCommand = new Command(async () => await SignOutAsync(), () => !IsBusy);
         OpenMapCommand = new Command(async () => await OpenMapAsync());
+        CreateFamilyCommand = new Command(async () => await CreateFamilyAsync(), () => !IsBusy);
+        JoinFamilyCommand = new Command(async () => await JoinFamilyAsync(), () => !IsBusy);
+        LeaveFamilyCommand = new Command(async () => await LeaveFamilyAsync(), () => !IsBusy);
 
         // Reflect persisted opt-in without forcing a permission prompt until Appearing refresh.
         _isSharingEnabled = _locationService.IsSharingEnabled;
         UpdateStatusFromService(hint: null);
+        ApplyFamilyStateFromService();
     }
 
     public void RefreshWelcome()
@@ -108,6 +173,9 @@ public class HomeViewModel : INotifyPropertyChanged
         // Sync toggle with preference (e.g. after Map page or permission change).
         SetSharingFlagWithoutSideEffects(_locationService.IsSharingEnabled);
         UpdateStatusFromService(LocationHint);
+
+        await _familyService.RefreshMembershipAsync();
+        await RefreshFamilyUiAsync();
 
         if (_locationService.IsSharingEnabled)
         {
@@ -156,6 +224,7 @@ public class HomeViewModel : INotifyPropertyChanged
             else
             {
                 await _locationService.DisableSharingAsync();
+                await _familyService.ClearPublishedLocationAsync();
                 SetSharingFlagWithoutSideEffects(false);
                 LocationHint = null;
                 LocationStatusText = "Off";
@@ -269,6 +338,109 @@ public class HomeViewModel : INotifyPropertyChanged
         }
     }
 
+    private void ApplyFamilyStateFromService()
+    {
+        FamilyCode = _familyService.CurrentFamilyId;
+        IsInFamily = !string.IsNullOrEmpty(FamilyCode);
+        FamilyStatusText = IsInFamily
+            ? $"Family code: {FamilyCode}"
+            : "Not in a family yet.";
+    }
+
+    private async Task RefreshFamilyUiAsync()
+    {
+        ApplyFamilyStateFromService();
+        MemberLabels.Clear();
+
+        if (!IsInFamily)
+            return;
+
+        var members = await _familyService.GetMembersAsync();
+        var self = _authService.CurrentUserId;
+        foreach (var m in members)
+        {
+            var label = m.Uid == self ? $"{m.DisplayName} (you)" : m.DisplayName;
+            MemberLabels.Add(label);
+        }
+
+        FamilyStatusText = members.Count == 0
+            ? $"Family code: {FamilyCode} — no members listed yet"
+            : $"Family code: {FamilyCode} — {members.Count} member(s)";
+    }
+
+    private async Task CreateFamilyAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            FamilyHint = null;
+            var (code, error) = await _familyService.CreateFamilyAsync();
+            if (error is not null)
+            {
+                FamilyHint = error;
+                return;
+            }
+
+            FamilyHint = $"Created! Share code {code} with family.";
+            await RefreshFamilyUiAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task JoinFamilyAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            FamilyHint = null;
+            var error = await _familyService.JoinFamilyAsync(JoinCodeInput);
+            if (error is not null)
+            {
+                FamilyHint = error;
+                return;
+            }
+
+            JoinCodeInput = string.Empty;
+            FamilyHint = "Joined family.";
+            await RefreshFamilyUiAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task LeaveFamilyAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            FamilyHint = null;
+            var error = await _familyService.LeaveFamilyAsync();
+            if (error is not null)
+                FamilyHint = error;
+            else
+                FamilyHint = "Left family.";
+            await RefreshFamilyUiAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private async Task OpenMapAsync()
     {
         try
@@ -293,6 +465,7 @@ public class HomeViewModel : INotifyPropertyChanged
             // Turn off sharing on sign-out so the next session starts privacy-safe.
             if (_locationService.IsSharingEnabled)
                 await _locationService.DisableSharingAsync();
+            await _familyService.ClearPublishedLocationAsync();
             SetSharingFlagWithoutSideEffects(false);
             LocationStatusText = "Off";
             LocationHint = null;

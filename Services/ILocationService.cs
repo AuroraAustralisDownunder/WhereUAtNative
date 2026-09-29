@@ -3,7 +3,8 @@ using Microsoft.Maui.Devices.Sensors;
 namespace WhereUAtNative.Services;
 
 /// <summary>
-/// Opt-in location sharing. Off by default; never uploads location in this release.
+/// Opt-in location sharing. Off by default; uploads only while Share my location is ON
+/// and the user belongs to a family (via LocationSyncService → Realtime Database).
 /// </summary>
 public interface ILocationService
 {
