@@ -184,14 +184,24 @@
         });
       }
 
+      function preferredZoom(current) {
+        if (!isFinite(current) || current < 14) return 16;
+        return current;
+      }
+
       function centerOnLocked(animate) {
         if (!lockedUserId || !users[lockedUserId] || !map) return;
         var u = users[lockedUserId];
         var latlng = L.latLng(u.lat, u.lon);
-        var z = map.getZoom();
-        if (!isFinite(z) || z < 2) z = 15;
-        if (animate === false) map.setView(latlng, Math.max(z, 14), { animate: false });
-        else map.panTo(latlng, { animate: true, duration: 0.35 });
+        var z = preferredZoom(map.getZoom());
+        // Keep user's zoom if already neighbourhood-level; bump only when too far out.
+        if (animate === false) {
+          map.setView(latlng, z, { animate: false });
+        } else if (map.getZoom() < 14) {
+          map.setView(latlng, 16, { animate: true });
+        } else {
+          map.panTo(latlng, { animate: true, duration: 0.35 });
+        }
       }
 
       function setLock(id) {
@@ -318,12 +328,13 @@
         if (first && !autoLockedSelf) {
           autoLockedSelf = true;
           setLock('self');
+          // setLock -> centerOnLocked bumps to neighbourhood zoom 16
         } else if (lockedUserId === 'self') {
           centerOnLocked(true);
         } else if (first) {
-          // First fix without lock: still focus once for usability
+          // First fix without lock: neighbourhood/street zoom
           ensureMap();
-          map.setView(L.latLng(lat, lon), 15);
+          map.setView(L.latLng(lat, lon), 16);
         }
       };
 

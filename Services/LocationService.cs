@@ -5,7 +5,7 @@ using Microsoft.Maui.Storage;
 namespace WhereUAtNative.Services;
 
 /// <summary>
-/// Local-only opt-in location. Preference defaults to false. No server/Firestore writes.
+/// Opt-in location. Preference defaults to false. Server upload handled by LocationSyncService when in a family.
 /// </summary>
 public sealed class LocationService : ILocationService
 {

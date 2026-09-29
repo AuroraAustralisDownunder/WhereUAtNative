@@ -52,6 +52,35 @@ public sealed class FirebaseAuthService : IAuthService
         }
     }
 
+    public string DisplayName
+    {
+        get
+        {
+            try
+            {
+                var user = CrossFirebaseAuth.Current.CurrentUser;
+                if (user is null)
+                    return "You";
+
+                if (!string.IsNullOrWhiteSpace(user.DisplayName))
+                    return user.DisplayName!.Trim();
+
+                var email = user.Email;
+                if (!string.IsNullOrWhiteSpace(email))
+                {
+                    var at = email.IndexOf('@');
+                    return at > 0 ? email[..at] : email;
+                }
+            }
+            catch
+            {
+                // fall through
+            }
+
+            return "You";
+        }
+    }
+
     public async Task<string?> SignInAsync(string email, string password)
     {
         try
@@ -69,5 +98,22 @@ public sealed class FirebaseAuthService : IAuthService
     public async Task SignOutAsync()
     {
         await CrossFirebaseAuth.Current.SignOutAsync();
+    }
+
+    public async Task<string?> GetIdTokenAsync(bool forceRefresh = false)
+    {
+        try
+        {
+            var user = CrossFirebaseAuth.Current.CurrentUser;
+            if (user is null)
+                return null;
+
+            var result = await user.GetIdTokenResultAsync(forceRefresh);
+            return result?.Token;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

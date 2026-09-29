@@ -13,7 +13,7 @@
     <ScrollView>
         <VerticalStackLayout Spacing="20"
                              Padding="30"
-                             VerticalOptions="Center"
+                             VerticalOptions="Start"
                              MaximumWidthRequest="420">
 
             <Label Text="Where U At"
@@ -80,10 +80,99 @@
                            IsVisible="{Binding IsLocationHintVisible}"
                            LineBreakMode="WordWrap" />
 
-                    <Label Text="Tip: open Map from the toolbar to see yourself when sharing is on."
+                    <Label Text="Tip: open Map from the toolbar to see yourself and family when sharing is on."
                            FontSize="12"
                            TextColor="#8E8E93"
                            LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Stroke="#3A3A3C"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 12"
+                    BackgroundColor="#2C2C2E"
+                    Padding="16">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Family"
+                           FontAttributes="Bold"
+                           FontSize="16"
+                           TextColor="#FFFFFF" />
+
+                    <Label Text="{Binding FamilyStatusText}"
+                           FontSize="14"
+                           TextColor="#AEAEB2"
+                           LineBreakMode="WordWrap" />
+
+                    <Label Text="{Binding FamilyHint}"
+                           FontSize="13"
+                           TextColor="#FFB74D"
+                           IsVisible="{Binding IsFamilyHintVisible}"
+                           LineBreakMode="WordWrap" />
+
+                    <VerticalStackLayout Spacing="10"
+                                         IsVisible="{Binding IsNotInFamily}">
+                        <Button Text="Create family"
+                                BackgroundColor="#4CAF50"
+                                TextColor="White"
+                                CornerRadius="8"
+                                HeightRequest="44"
+                                Command="{Binding CreateFamilyCommand}"
+                                IsEnabled="{Binding IsNotBusy}" />
+
+                        <Label Text="Or join with a code"
+                               FontSize="13"
+                               TextColor="#8E8E93" />
+
+                        <Entry Text="{Binding JoinCodeInput, Mode=TwoWay}"
+                               Placeholder="6-character code"
+                               PlaceholderColor="#8E8E93"
+                               TextColor="#FFFFFF"
+                               BackgroundColor="#1C1C1E"
+                               MaxLength="8"
+                               Keyboard="Text"
+                               HeightRequest="44" />
+
+                        <Button Text="Join family"
+                                BackgroundColor="#3A3A3C"
+                                TextColor="White"
+                                CornerRadius="8"
+                                HeightRequest="44"
+                                Command="{Binding JoinFamilyCommand}"
+                                IsEnabled="{Binding IsNotBusy}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="10"
+                                         IsVisible="{Binding IsInFamily}">
+                        <Label Text="Share this code so others can join:"
+                               FontSize="13"
+                               TextColor="#8E8E93" />
+                        <Label Text="{Binding FamilyCode}"
+                               FontSize="28"
+                               FontAttributes="Bold"
+                               HorizontalOptions="Center"
+                               TextColor="#FFD54F"
+                               CharacterSpacing="4" />
+
+                        <CollectionView ItemsSource="{Binding MemberLabels}"
+                                        HeightRequest="120">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Label Text="{Binding .}"
+                                           FontSize="14"
+                                           TextColor="#E5E5EA"
+                                           Padding="0,4" />
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                        <Button Text="Leave family"
+                                BackgroundColor="#E53935"
+                                TextColor="White"
+                                CornerRadius="8"
+                                HeightRequest="44"
+                                Command="{Binding LeaveFamilyCommand}"
+                                IsEnabled="{Binding IsNotBusy}" />
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 

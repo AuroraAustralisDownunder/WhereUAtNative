@@ -1,6 +1,6 @@
 # Where U At (WhereUAtNative)
 
-Family Tracker — a privacy-first .NET MAUI app for Android and iOS. Firebase email/password authentication plus **opt-in** location sharing and a lightweight map shell. Location is **off by default** and never uploaded in this release.
+Family Tracker — a privacy-first .NET MAUI app for Android and iOS. Firebase email/password authentication, **opt-in** location sharing, family groups, and a lightweight OpenStreetMap map. Location is **off by default** and only uploaded while Share my location is ON **and** you belong to a family.
 
 ## Open the project
 
@@ -19,6 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
+| Display version | `0.2.0` (versionCode `3`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -36,14 +37,13 @@ Create (or use) a **Firebase Authentication** email/password user in the `whereu
 
 ## Location sharing (opt-in)
 
-Location is **local-only** in this build:
-
 - Sharing defaults to **Off** (device preference `location_sharing_enabled` = false).
 - The Home switch **Share my location** requests **when-in-use** permission, then reads GPS.
 - Coords shown on Home/Map are rounded (~4 decimal places) for a privacy-friendly display.
-- Nothing is written to Firestore or any server yet.
+- While sharing is on **and** you are in a family, the app writes your live position to Firebase Realtime Database under `families/{code}/locations/{uid}` (foreground only).
+- Turning sharing **Off**, leaving the family, or signing out removes your published location.
 - Sign-out turns sharing off again for a clean next session.
-- While sharing is on and Home is visible, position refreshes about every 30 seconds (cancelled when you leave Home or turn sharing off).
+- While sharing is on and Home is visible, position refreshes about every 30 seconds.
 
 ### Permissions
 
@@ -52,23 +52,84 @@ Location is **local-only** in this build:
 | Android | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` (foreground / when-in-use only — no background location yet) |
 | iOS / Mac Catalyst | `NSLocationWhenInUseUsageDescription` only (no Always) |
 
-### How to test the toggle
+## Family groups
 
-1. Sign in on a physical device or an emulator with mock / GPS location enabled.
-2. On Home, leave **Share my location** Off — status should read **Off**.
-3. Turn the switch **On** — accept the system permission prompt.
-4. Status should move to **Waiting for GPS…** then **On — lat, lon** (rounded).
-5. Deny permission (or revoke in Settings) — sharing stays/returns **Off** with a friendly **Permission needed** message; the app must not crash.
-6. Use the toolbar **Map** item — with sharing on and a fix, you should see a **You** pin; with sharing off, an empty-state message instead.
-7. Turn sharing **Off** — updates stop and status returns to **Off**.
+Privacy-first: **location is only uploaded when that user has Share my location ON.**
+
+### How to create / join (testing)
+
+1. Sign in as user A → Home → **Family** → **Create family**. Note the **6-character code**.
+2. Sign in as user B (second device/emulator or after sign-out) → enter the code → **Join family**.
+3. Both users turn **Share my location** On and grant when-in-use permission.
+4. Open **Map** — you should see yourself and the other sharing member(s). Tap a marker to lock/follow (neighbourhood zoom ~16).
+
+### Data model (Realtime Database)
+
+```
+users/{uid}/familyId
+users/{uid}/displayName
+families/{familyId}/createdBy, createdAt, code
+families/{familyId}/members/{uid} = { displayName, joinedAt }
+families/{familyId}/locations/{uid} = { lat, lon, updatedAt, displayName, sharing: true }
+```
+
+`familyId` is the invite code (6 chars). The client only writes its own `users/{uid}` and `…/locations/{uid}` / `…/members/{uid}` nodes.
+
+## Firebase console steps (required)
+
+This release uses **Firebase Realtime Database** REST with the Auth ID token (no Firestore package — keeps Android Release merges reliable). `google-services.json` already includes:
+
+`https://whereuat-firebase-default-rtdb.asia-southeast1.firebasedatabase.app`
+
+### Enable Realtime Database
+
+1. Open [Firebase Console](https://console.firebase.google.com/) → project **whereuat-firebase**.
+2. Build → **Realtime Database** → Create database (region **asia-southeast1** if prompted to match the URL above).
+3. Start in **locked mode**, then paste the rules below.
+
+### Starter security rules (paste in RTDB Rules)
+
+```json
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "families": {
+      "$familyId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        "members": {
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid"
+          }
+        },
+        "locations": {
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Tighten further for production (e.g. only members of a family may read that family’s `locations` / `members`). The app already only writes the signed-in user’s own location and membership nodes.
+
+> If you prefer Firestore instead: enable Firestore in the console and mirror the same collections (`users`, `families/{id}/members`, `families/{id}/locations`). This app build talks to **Realtime Database**, not Firestore.
 
 ## Maps (OpenStreetMap)
 
-The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles (`Resources/Raw/map.html`). No Google Maps API key is required on any platform.
+The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles (`Resources/Raw/map.html`). No Google Maps API key is required.
 
-- Pin is shown only when location sharing is on and a GPS fix exists.
-- Otherwise the map page shows an empty-state message (same privacy rules as before).
-- Leaflet JS/CSS load from the unpkg CDN; OSM tiles need network access (`INTERNET` permission already declared).
+- Self pin + family markers when locations are available.
+- Default / lock zoom is **16** (neighbourhood/street). Subsequent updates pan without resetting to world view; if zoom &lt; 14 while locked, it bumps back to 16.
+- Tap a marker to lock/follow; Unlock on the bottom bar releases follow.
+- Leaflet JS/CSS load from the unpkg CDN; OSM tiles need network access.
 
 ## Privacy defaults (this release)
 
@@ -77,7 +138,7 @@ The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles 
 - Precise location is never logged.
 - Location is not requested until the user turns sharing on.
 - No background / Always location.
-- No location upload to other users or Firestore yet.
+- Location upload only while sharing is ON and the user is in a family.
 
 ## Note about repo docs
 
@@ -85,7 +146,7 @@ The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles 
 
 ## Next up
 
-- Sharing locations with family (Firestore) — still opt-in
+- Tighten RTDB rules so only family members can read a family’s locations
 - Background tracking only if product explicitly requires it
 
 ## Android release APK (Obtainium)
@@ -99,4 +160,3 @@ dotnet publish -f net10.0-android -c Release -p:AndroidPackageFormat=apk
 ```
 
 Package id: `com.familytracker.whereuat`. Install via [Obtainium](https://github.com/ImranR98/Obtainium) from GitHub Releases.
-

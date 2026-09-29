@@ -22,7 +22,7 @@
                        FontSize="14"
                        TextColor="#E5E5EA"
                        LineBreakMode="WordWrap" />
-                <Label Text="Map tiles: OpenStreetMap via Leaflet (no Google API key)."
+                <Label Text="Map tiles: OpenStreetMap via Leaflet. Tap a marker to lock/follow."
                        FontSize="11"
                        TextColor="#8E8E93"
                        LineBreakMode="WordWrap" />
@@ -31,7 +31,7 @@
 
         <Grid Grid.Row="1">
             <WebView x:Name="MapWebView"
-                     IsVisible="{Binding HasPin}"
+                     IsVisible="{Binding HasMapContent}"
                      Navigated="OnMapWebViewNavigated" />
 
             <VerticalStackLayout IsVisible="{Binding ShowEmptyMessage}"
