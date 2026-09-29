@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="WhereUAtNative.Views.LoginPage"
              Title="Family Tracker Login"
-             BackgroundColor="#F7F9FC">
+             BackgroundColor="#1C1C1E">
 
     <VerticalStackLayout Spacing="20"
                          Padding="30"
@@ -14,25 +14,31 @@
                FontSize="32"
                FontAttributes="Bold"
                HorizontalOptions="Center"
-               TextColor="#1A1A2E"
+               TextColor="#FFFFFF"
                Margin="0,0,0,4" />
 
         <Label Text="Where U At"
                FontSize="16"
                HorizontalOptions="Center"
-               TextColor="#666666"
+               TextColor="#AEAEB2"
                Margin="0,0,0,16" />
 
         <Entry Placeholder="Email"
+               PlaceholderColor="#8E8E93"
                Keyboard="Email"
                ClearButtonVisibility="WhileEditing"
                Text="{Binding Email}"
+               TextColor="#FFFFFF"
+               BackgroundColor="#3A3A3C"
                IsEnabled="{Binding IsNotBusy}" />
 
         <Entry Placeholder="Password"
+               PlaceholderColor="#8E8E93"
                IsPassword="True"
                ClearButtonVisibility="WhileEditing"
                Text="{Binding Password}"
+               TextColor="#FFFFFF"
+               BackgroundColor="#3A3A3C"
                IsEnabled="{Binding IsNotBusy}" />
 
         <Button Text="Secure Login"
@@ -50,7 +56,7 @@
                            HeightRequest="36" />
 
         <Label Text="{Binding StatusMessage}"
-               TextColor="#555555"
+               TextColor="#AEAEB2"
                HorizontalOptions="Center"
                IsVisible="{Binding IsStatusVisible}" />
 

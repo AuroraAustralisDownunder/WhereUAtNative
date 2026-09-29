@@ -8,7 +8,7 @@
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
         crossorigin="" />
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #e8eef5; }
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #1C1C1E; }
     #map { height: 100%; width: 100%; }
     .empty {
       display: none;
@@ -20,25 +20,133 @@
       padding: 24px;
       box-sizing: border-box;
       font-family: system-ui, -apple-system, sans-serif;
-      color: #555;
+      color: #AEAEB2;
       font-size: 16px;
+      background: #1C1C1E;
     }
     .empty.visible { display: flex; }
     #map.hidden { display: none; }
+
+    .user-div-icon {
+      background: transparent !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+    .user-marker {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #4CAF50;
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+    }
+    .user-marker.locked {
+      border-color: #FFD54F;
+      box-shadow: 0 0 0 3px rgba(255, 213, 79, 0.55), 0 2px 8px rgba(0,0,0,0.5);
+      transform: scale(1.12);
+    }
+    .user-marker-label {
+      position: absolute;
+      left: 50%;
+      top: 100%;
+      transform: translateX(-50%);
+      margin-top: 4px;
+      background: rgba(28,28,30,0.92);
+      color: #F2F2F7;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    }
+
+    #lock-bar {
+      display: none;
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 18px;
+      z-index: 1000;
+      background: rgba(44,44,46,0.95);
+      color: #F2F2F7;
+      font-family: system-ui, -apple-system, sans-serif;
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      align-items: center;
+      gap: 10px;
+      box-sizing: border-box;
+    }
+    #lock-bar.visible { display: flex; }
+    #lock-label {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #unlock-btn {
+      border: none;
+      background: #4CAF50;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="empty" class="empty visible">Turn on location sharing to see yourself on the map.</div>
   <div id="map" class="hidden"></div>
+  <div id="lock-bar">
+    <span id="lock-label">Locked</span>
+    <button type="button" id="unlock-btn">Unlock</button>
+  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin=""></script>
   <script>
     (function () {
       var map = null;
-      var marker = null;
+      var users = {}; // id -> { marker, lat, lon, label }
+      var lockedUserId = null;
+      var autoLockedSelf = false;
       var emptyEl = document.getElementById('empty');
       var mapEl = document.getElementById('map');
+      var lockBar = document.getElementById('lock-bar');
+      var lockLabel = document.getElementById('lock-label');
+      var unlockBtn = document.getElementById('unlock-btn');
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function initialFor(label) {
+        var t = String(label || '?').trim();
+        if (!t) return '?';
+        if (/^you$/i.test(t)) return 'Y';
+        return t.charAt(0).toUpperCase();
+      }
 
       function ensureMap() {
         if (map) return map;
@@ -53,6 +161,151 @@
         return map;
       }
 
+      function updateLockBar() {
+        if (!lockedUserId || !users[lockedUserId]) {
+          lockBar.classList.remove('visible');
+          return;
+        }
+        var label = users[lockedUserId].label || lockedUserId;
+        lockLabel.textContent = 'Locked: ' + label;
+        lockBar.classList.add('visible');
+      }
+
+      function refreshMarkerStyles() {
+        Object.keys(users).forEach(function (id) {
+          var u = users[id];
+          if (!u || !u.marker) return;
+          var el = u.marker.getElement();
+          if (!el) return;
+          var avatar = el.querySelector('.user-marker');
+          if (!avatar) return;
+          if (id === lockedUserId) avatar.classList.add('locked');
+          else avatar.classList.remove('locked');
+        });
+      }
+
+      function centerOnLocked(animate) {
+        if (!lockedUserId || !users[lockedUserId] || !map) return;
+        var u = users[lockedUserId];
+        var latlng = L.latLng(u.lat, u.lon);
+        var z = map.getZoom();
+        if (!isFinite(z) || z < 2) z = 15;
+        if (animate === false) map.setView(latlng, Math.max(z, 14), { animate: false });
+        else map.panTo(latlng, { animate: true, duration: 0.35 });
+      }
+
+      function setLock(id) {
+        if (!id || !users[id]) return;
+        lockedUserId = id;
+        refreshMarkerStyles();
+        updateLockBar();
+        centerOnLocked(true);
+      }
+
+      function unlock() {
+        lockedUserId = null;
+        refreshMarkerStyles();
+        updateLockBar();
+      }
+
+      unlockBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        unlock();
+      });
+
+      function makeIcon(id, label, isLocked) {
+        var initial = initialFor(label);
+        var html =
+          '<div class="user-marker' + (isLocked ? ' locked' : '') + '">' + escapeHtml(initial) + '</div>' +
+          '<div class="user-marker-label">' + escapeHtml(label) + '</div>';
+        return L.divIcon({
+          className: 'user-div-icon',
+          html: html,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+          popupAnchor: [0, -20]
+        });
+      }
+
+      function showMapIfNeeded() {
+        if (Object.keys(users).length === 0) {
+          mapEl.classList.add('hidden');
+          emptyEl.classList.add('visible');
+          lockBar.classList.remove('visible');
+          return false;
+        }
+        ensureMap();
+        return true;
+      }
+
+      window.upsertUser = function (id, lat, lon, label) {
+        id = String(id == null ? '' : id);
+        if (!id) return;
+        lat = Number(lat);
+        lon = Number(lon);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        label = (label == null || label === '') ? id : String(label);
+
+        ensureMap();
+        var latlng = L.latLng(lat, lon);
+        var existing = users[id];
+
+        if (existing) {
+          existing.lat = lat;
+          existing.lon = lon;
+          existing.label = label;
+          existing.marker.setLatLng(latlng);
+          existing.marker.setIcon(makeIcon(id, label, id === lockedUserId));
+          existing.marker.setPopupContent(escapeHtml(label));
+        } else {
+          var marker = L.marker(latlng, {
+            icon: makeIcon(id, label, id === lockedUserId),
+            keyboard: true,
+            riseOnHover: true
+          }).addTo(map);
+          marker.bindPopup(escapeHtml(label));
+          marker.on('click', function () {
+            setLock(id);
+          });
+          users[id] = { marker: marker, lat: lat, lon: lon, label: label };
+        }
+
+        if (id === lockedUserId) {
+          refreshMarkerStyles();
+          updateLockBar();
+          centerOnLocked(true);
+        }
+
+        setTimeout(function () { if (map) map.invalidateSize(); }, 50);
+      };
+
+      window.removeUser = function (id) {
+        id = String(id == null ? '' : id);
+        var u = users[id];
+        if (!u) return;
+        if (map && u.marker) map.removeLayer(u.marker);
+        delete users[id];
+        if (lockedUserId === id) unlock();
+        if (Object.keys(users).length === 0) {
+          mapEl.classList.add('hidden');
+          emptyEl.textContent = 'Turn on location sharing to see yourself on the map.';
+          emptyEl.classList.add('visible');
+          lockBar.classList.remove('visible');
+        }
+      };
+
+      window.clearUsers = function () {
+        Object.keys(users).forEach(function (id) {
+          var u = users[id];
+          if (map && u.marker) map.removeLayer(u.marker);
+        });
+        users = {};
+        lockedUserId = null;
+        autoLockedSelf = false;
+        lockBar.classList.remove('visible');
+      };
+
       window.setPin = function (lat, lon) {
         lat = Number(lat);
         lon = Number(lon);
@@ -60,22 +313,22 @@
           window.clearPin('Waiting for GPS…');
           return;
         }
-        ensureMap();
-        var latlng = L.latLng(lat, lon);
-        if (marker) {
-          marker.setLatLng(latlng);
-        } else {
-          marker = L.marker(latlng).addTo(map).bindPopup('You');
+        var first = !users['self'];
+        window.upsertUser('self', lat, lon, 'You');
+        if (first && !autoLockedSelf) {
+          autoLockedSelf = true;
+          setLock('self');
+        } else if (lockedUserId === 'self') {
+          centerOnLocked(true);
+        } else if (first) {
+          // First fix without lock: still focus once for usability
+          ensureMap();
+          map.setView(L.latLng(lat, lon), 15);
         }
-        map.setView(latlng, 15);
-        setTimeout(function () { if (map) map.invalidateSize(); }, 50);
       };
 
       window.clearPin = function (message) {
-        if (marker && map) {
-          map.removeLayer(marker);
-          marker = null;
-        }
+        window.clearUsers();
         mapEl.classList.add('hidden');
         emptyEl.textContent = message || 'Turn on location sharing to see yourself on the map.';
         emptyEl.classList.add('visible');
@@ -84,6 +337,9 @@
       window.showEmpty = function (message) {
         window.clearPin(message);
       };
+
+      window.lockUser = function (id) { setLock(String(id)); };
+      window.unlockUser = function () { unlock(); };
 
       // Query-string bootstrap: ?lat=&lon= or ?empty=1&msg=
       try {
