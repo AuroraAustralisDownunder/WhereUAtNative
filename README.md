@@ -87,3 +87,16 @@ The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles 
 
 - Sharing locations with family (Firestore) — still opt-in
 - Background tracking only if product explicitly requires it
+
+## Android release APK (Obtainium)
+
+Release builds are signed with a local keystore at `keystore/whereuat-release.jks` (gitignored). Set:
+
+```bash
+export WHEREUAT_KEYSTORE_PASS=...
+export WHEREUAT_KEY_PASS=...
+dotnet publish -f net10.0-android -c Release -p:AndroidPackageFormat=apk
+```
+
+Package id: `com.familytracker.whereuat`. Install via [Obtainium](https://github.com/ImranR98/Obtainium) from GitHub Releases.
+
