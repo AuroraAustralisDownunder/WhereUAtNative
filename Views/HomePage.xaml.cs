@@ -13,9 +13,15 @@ public partial class HomePage : ContentPage
         BindingContext = _viewModel;
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _viewModel.RefreshWelcome();
+        await _viewModel.OnAppearingAsync();
+    }
+
+    protected override void OnDisappearing()
+    {
+        _viewModel.OnDisappearing();
+        base.OnDisappearing();
     }
 }

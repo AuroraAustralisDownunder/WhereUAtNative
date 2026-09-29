@@ -1,6 +1,14 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
+	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true">
+		<!-- Google Maps API key (required for Android map tiles). Replace YOUR_KEY_HERE when ready.
+		<meta-data android:name="com.google.android.geo.API_KEY" android:value="YOUR_KEY_HERE" />
+		-->
+	</application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
+	<!-- Foreground / when-in-use location only. Requested at runtime when the user opts in. -->
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+	<!-- Do not add ACCESS_BACKGROUND_LOCATION until background tracking is an explicit product choice. -->
 </manifest>

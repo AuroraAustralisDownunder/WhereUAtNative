@@ -28,5 +28,7 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Where U At uses your location only when you turn on location sharing, so family members can see where you are. Sharing is off by default and you can turn it off anytime.</string>
 </dict>
 </plist>
