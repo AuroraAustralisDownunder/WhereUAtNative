@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="WhereUAtNative.Views.MapPage"
              Title="Map"
-             BackgroundColor="#F7F9FC">
+             BackgroundColor="#1C1C1E">
 
     <ContentPage.ToolbarItems>
         <ToolbarItem Text="Home"
@@ -12,19 +12,19 @@
 
     <Grid RowDefinitions="Auto,*">
         <Border Grid.Row="0"
-                Stroke="#E0E6ED"
+                Stroke="#3A3A3C"
                 StrokeThickness="1"
-                BackgroundColor="#FFFFFF"
+                BackgroundColor="#2C2C2E"
                 Padding="16"
                 Margin="12">
             <VerticalStackLayout Spacing="6">
                 <Label Text="{Binding StatusMessage}"
                        FontSize="14"
-                       TextColor="#333333"
+                       TextColor="#E5E5EA"
                        LineBreakMode="WordWrap" />
                 <Label Text="Map tiles: OpenStreetMap via Leaflet (no Google API key)."
                        FontSize="11"
-                       TextColor="#888888"
+                       TextColor="#8E8E93"
                        LineBreakMode="WordWrap" />
             </VerticalStackLayout>
         </Border>
@@ -42,7 +42,7 @@
                 <Label Text="{Binding StatusMessage}"
                        FontSize="16"
                        HorizontalTextAlignment="Center"
-                       TextColor="#555555"
+                       TextColor="#AEAEB2"
                        LineBreakMode="WordWrap" />
                 <Button Text="Back to Home"
                         Command="{Binding GoHomeCommand}"

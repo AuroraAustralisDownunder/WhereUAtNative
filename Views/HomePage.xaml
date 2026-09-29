@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="WhereUAtNative.Views.HomePage"
              Title="Where U At"
-             BackgroundColor="#F7F9FC">
+             BackgroundColor="#1C1C1E">
 
     <ContentPage.ToolbarItems>
         <ToolbarItem Text="Map"
@@ -20,41 +20,41 @@
                    FontSize="28"
                    FontAttributes="Bold"
                    HorizontalOptions="Center"
-                   TextColor="#1A1A2E" />
+                   TextColor="#FFFFFF" />
 
             <Label Text="{Binding WelcomeText}"
                    FontSize="18"
                    HorizontalOptions="Center"
-                   TextColor="#333333" />
+                   TextColor="#E5E5EA" />
 
-            <Border Stroke="#E0E6ED"
+            <Border Stroke="#3A3A3C"
                     StrokeThickness="1"
                     StrokeShape="RoundRectangle 12"
-                    BackgroundColor="#FFFFFF"
+                    BackgroundColor="#2C2C2E"
                     Padding="16"
                     Margin="0,8,0,0">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Privacy"
                            FontAttributes="Bold"
                            FontSize="16"
-                           TextColor="#1A1A2E" />
+                           TextColor="#FFFFFF" />
                     <Label Text="{Binding PrivacyReminder}"
                            FontSize="14"
-                           TextColor="#555555"
+                           TextColor="#AEAEB2"
                            LineBreakMode="WordWrap" />
                 </VerticalStackLayout>
             </Border>
 
-            <Border Stroke="#E0E6ED"
+            <Border Stroke="#3A3A3C"
                     StrokeThickness="1"
                     StrokeShape="RoundRectangle 12"
-                    BackgroundColor="#FFFFFF"
+                    BackgroundColor="#2C2C2E"
                     Padding="16">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Location sharing"
                            FontAttributes="Bold"
                            FontSize="16"
-                           TextColor="#1A1A2E" />
+                           TextColor="#FFFFFF" />
 
                     <Grid ColumnDefinitions="*,Auto"
                           ColumnSpacing="12">
@@ -62,7 +62,7 @@
                                Text="Share my location"
                                FontSize="15"
                                VerticalOptions="Center"
-                               TextColor="#333333" />
+                               TextColor="#E5E5EA" />
                         <Switch Grid.Column="1"
                                 IsToggled="{Binding IsSharingEnabled, Mode=TwoWay}"
                                 OnColor="#4CAF50"
@@ -71,18 +71,18 @@
 
                     <Label Text="{Binding LocationStatusText}"
                            FontSize="14"
-                           TextColor="#555555"
+                           TextColor="#AEAEB2"
                            LineBreakMode="WordWrap" />
 
                     <Label Text="{Binding LocationHint}"
                            FontSize="13"
-                           TextColor="#E65100"
+                           TextColor="#FFB74D"
                            IsVisible="{Binding IsLocationHintVisible}"
                            LineBreakMode="WordWrap" />
 
                     <Label Text="Tip: open Map from the toolbar to see yourself when sharing is on."
                            FontSize="12"
-                           TextColor="#888888"
+                           TextColor="#8E8E93"
                            LineBreakMode="WordWrap" />
                 </VerticalStackLayout>
             </Border>
