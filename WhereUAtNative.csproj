@@ -79,4 +79,14 @@
 		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" Link="GoogleService-Info.plist" />
 	</ItemGroup>
 
+
+	<!-- Release signing: passwords from env WHEREUAT_KEYSTORE_PASS / WHEREUAT_KEY_PASS (never commit secrets). -->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release' And '$(TargetFramework)' == 'net10.0-android'">
+		<AndroidKeyStore>true</AndroidKeyStore>
+		<AndroidSigningKeyStore>$(MSBuildThisFileDirectory)keystore\whereuat-release.jks</AndroidSigningKeyStore>
+		<AndroidSigningStorePass>$(WHEREUAT_KEYSTORE_PASS)</AndroidSigningStorePass>
+		<AndroidSigningKeyAlias>whereuat</AndroidSigningKeyAlias>
+		<AndroidSigningKeyPass>$(WHEREUAT_KEY_PASS)</AndroidSigningKeyPass>
+	</PropertyGroup>
+
 </Project>

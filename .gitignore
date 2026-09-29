@@ -36,3 +36,10 @@ packages/
 *.keystore
 local.properties
 appsettings.*.local.json
+
+## Android release signing (NEVER commit keystore or passwords)
+keystore/
+*.jks
+*.keystore
+*.env
+!*.env.example
