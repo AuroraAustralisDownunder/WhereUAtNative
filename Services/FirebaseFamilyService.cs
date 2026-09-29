@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Maui.Storage;
@@ -129,8 +130,8 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
             return "Sign in to join a family.";
 
         code = NormalizeCode(code);
-        if (code.Length != 6)
-            return "Enter a 6-character family code.";
+        if (!IsValidInviteCode(code))
+            return "Enter a valid 6-character family code.";
 
         if (!string.IsNullOrEmpty(_familyId))
             return "Leave your current family before joining another.";
@@ -367,8 +368,8 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
 
     private async Task<string> GetAsync(string path, CancellationToken ct)
     {
-        var url = await BuildUrlAsync(path, ct);
-        using var response = await _http.GetAsync(url, ct);
+        using var request = await CreateAuthorizedRequestAsync(HttpMethod.Get, path, ct);
+        using var response = await _http.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"GET {path} failed: {(int)response.StatusCode}");
@@ -377,22 +378,25 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
 
     private async Task<bool> PutAsync(string path, string jsonBody, CancellationToken ct)
     {
-        var url = await BuildUrlAsync(path, ct);
-        using var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-        using var response = await _http.PutAsync(url, content, ct);
+        using var request = await CreateAuthorizedRequestAsync(HttpMethod.Put, path, ct);
+        request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+        using var response = await _http.SendAsync(request, ct);
         return response.IsSuccessStatusCode;
     }
 
     private async Task DeleteAsync(string path, CancellationToken ct)
     {
-        var url = await BuildUrlAsync(path, ct);
-        using var response = await _http.DeleteAsync(url, ct);
+        using var request = await CreateAuthorizedRequestAsync(HttpMethod.Delete, path, ct);
+        using var response = await _http.SendAsync(request, ct);
         // 404 is fine
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
             throw new InvalidOperationException($"DELETE {path} failed: {(int)response.StatusCode}");
     }
 
-    private async Task<string> BuildUrlAsync(string path, CancellationToken ct)
+    /// <summary>
+    /// Auth ID token goes only in the Authorization header over HTTPS — never in the URL/query.
+    /// </summary>
+    private async Task<HttpRequestMessage> CreateAuthorizedRequestAsync(HttpMethod method, string path, CancellationToken ct)
     {
         var token = await _auth.GetIdTokenAsync(false);
         if (string.IsNullOrEmpty(token))
@@ -402,7 +406,10 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
             throw new InvalidOperationException("Not authenticated.");
 
         var trimmed = path.TrimStart('/');
-        return $"{DatabaseUrl}/{trimmed}?auth={Uri.EscapeDataString(token)}";
+        var url = $"{DatabaseUrl}/{trimmed}";
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
     }
 
     private static string GenerateFamilyCode()
@@ -417,6 +424,20 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
 
     private static string NormalizeCode(string code)
         => new string((code ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+
+    /// <summary>Invite codes are 6 chars from the generation alphabet (no 0/O/1/I).</summary>
+    private static bool IsValidInviteCode(string code)
+    {
+        if (code.Length != 6)
+            return false;
+        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        foreach (var c in code)
+        {
+            if (alphabet.IndexOf(c) < 0)
+                return false;
+        }
+        return true;
+    }
 
     private static bool IsJsonNull(string? json)
         => string.IsNullOrWhiteSpace(json) || json.Trim() == "null";

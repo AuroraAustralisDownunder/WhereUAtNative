@@ -59,13 +59,13 @@
                    MaxLines="2" />
         </Border>
 
-        <!-- Toggle hint (permission / GPS) -->
+        <!-- Toggle hint (permission / GPS) — above bottom Unlock bar, clear of mid-right FABs -->
         <Border IsVisible="{Binding IsToggleHintVisible}"
                 StrokeThickness="0"
                 BackgroundColor="#E62C2C2E"
                 StrokeShape="RoundRectangle 10"
                 Padding="12,8"
-                Margin="12,0,72,100"
+                Margin="12,0,72,88"
                 VerticalOptions="End"
                 HorizontalOptions="Fill">
             <Label Text="{Binding ToggleHint}"
@@ -74,13 +74,14 @@
                    LineBreakMode="WordWrap" />
         </Border>
 
-        <!-- Right-side FAB stack: location (mid) above sign-out (bottom) -->
+        <!-- Mid-right FAB stack (~40–45% down via Center + upward bias) — clears Leaflet Unlock -->
         <VerticalStackLayout HorizontalOptions="End"
-                             VerticalOptions="End"
-                             Margin="0,0,18,28"
+                             VerticalOptions="Center"
+                             Margin="0,0,18,0"
+                             TranslationY="-36"
                              Spacing="14">
 
-            <!-- Location sharing FAB -->
+            <!-- Location sharing FAB (primary) -->
             <Button WidthRequest="58"
                     HeightRequest="58"
                     CornerRadius="29"
@@ -92,7 +93,7 @@
                     Command="{Binding ToggleSharingCommand}"
                     SemanticProperties.Description="Toggle location sharing" />
 
-            <!-- Sign out FAB — subtler / smaller -->
+            <!-- Sign out FAB — secondary / smaller -->
             <Button WidthRequest="44"
                     HeightRequest="44"
                     CornerRadius="22"

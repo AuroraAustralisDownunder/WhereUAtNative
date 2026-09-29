@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.1` (versionCode `4`) |
+| Display version | `0.2.2` (versionCode `5`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -33,12 +33,12 @@ Create (or use) a **Firebase Authentication** email/password user in the `whereu
 
 1. Launch on a device or emulator.
 2. Sign in with the Firebase email/password user.
-3. You should land straight on the **Map** (full-bleed OSM). Use the green pin FAB to share location, **Out** to sign out, and **Settings** for family/account.
+3. You should land straight on the **Map** (full-bleed OSM). Use the mid-right green pin FAB to share location, **Out** (below it) to sign out, and **Settings** for family/account.
 
 ## Location sharing (opt-in)
 
 - Sharing defaults to **Off** (device preference `location_sharing_enabled` = false).
-- The map **pin FAB** (mid-right) toggles Share my location — green when on, muted when off. It requests **when-in-use** permission, then reads GPS.
+- The map **pin FAB** (mid-right, vertically centered / slightly high so Leaflet’s Unlock stays clear) toggles Share my location — green when on, muted when off. It requests **when-in-use** permission, then reads GPS.
 - Coords shown on the map status chip / Settings are rounded (~4 decimal places) for a privacy-friendly display.
 - While sharing is on **and** you are in a family, the app writes your live position to Firebase Realtime Database under `families/{code}/locations/{uid}` (foreground only).
 - Turning sharing **Off**, leaving the family, or signing out removes your published location.
@@ -118,7 +118,7 @@ This release uses **Firebase Realtime Database** REST with the Auth ID token (no
 }
 ```
 
-Tighten further for production (e.g. only members of a family may read that family’s `locations` / `members`). The app already only writes the signed-in user’s own location and membership nodes.
+**Production should tighten these rules** so only members of a family may read that family’s `locations` / `members` (the starter rules above allow any signed-in user to read any family). The app already only writes the signed-in user’s own location and membership nodes, and sends the Auth ID token in the `Authorization: Bearer` header (never in the URL).
 
 > If you prefer Firestore instead: enable Firestore in the console and mirror the same collections (`users`, `families/{id}/members`, `families/{id}/locations`). This app build talks to **Realtime Database**, not Firestore.
 
@@ -133,12 +133,14 @@ The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles 
 
 ## Privacy defaults (this release)
 
-- Credentials are never logged.
-- Login failures show a generic message.
+- Credentials / tokens are never logged; Auth ID tokens are sent only as `Authorization: Bearer` over HTTPS (not in query strings).
+- Login failures show a generic message (no raw exception text).
 - Precise location is never logged.
 - Location is not requested until the user turns sharing on.
 - No background / Always location.
-- Location upload only while sharing is ON and the user is in a family.
+- Location upload only while sharing is ON and the user is in a family; cleared on share-off / leave / sign-out.
+- Family invite codes are validated (length + charset) before join.
+- Map WebView loads packaged HTML only; top-level http(s) navigations are blocked.
 
 ## Note about repo docs
 
