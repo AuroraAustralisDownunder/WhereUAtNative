@@ -30,9 +30,17 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
     {
         _auth = auth;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        _familyId = Preferences.Default.Get(FamilyIdPreferenceKey, string.Empty);
-        if (string.IsNullOrWhiteSpace(_familyId))
+        try
+        {
+            _familyId = Preferences.Default.Get(FamilyIdPreferenceKey, string.Empty);
+            if (string.IsNullOrWhiteSpace(_familyId))
+                _familyId = null;
+        }
+        catch
+        {
+            // Preferences may not be ready during early CreateMauiApp DI resolve.
             _familyId = null;
+        }
     }
 
     public string? CurrentFamilyId => _familyId;
@@ -424,12 +432,20 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
             return;
 
         _familyId = normalized;
-        if (normalized is null)
-            Preferences.Default.Remove(FamilyIdPreferenceKey);
-        else
-            Preferences.Default.Set(FamilyIdPreferenceKey, normalized);
+        try
+        {
+            if (normalized is null)
+                Preferences.Default.Remove(FamilyIdPreferenceKey);
+            else
+                Preferences.Default.Set(FamilyIdPreferenceKey, normalized);
+        }
+        catch
+        {
+            // Preferences unavailable — keep in-memory family id only.
+        }
 
-        FamilyChanged?.Invoke(this, EventArgs.Empty);
+        try { FamilyChanged?.Invoke(this, EventArgs.Empty); }
+        catch { /* subscriber fault */ }
     }
 
     private async Task<string> GetAsync(string path, CancellationToken ct)

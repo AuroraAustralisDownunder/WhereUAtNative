@@ -13,7 +13,14 @@ public sealed class LocationService : ILocationService
 
     private Location? _lastKnown;
 
-    public bool IsSharingEnabled => Preferences.Default.Get(SharingPreferenceKey, false);
+    public bool IsSharingEnabled
+    {
+        get
+        {
+            try { return Preferences.Default.Get(SharingPreferenceKey, false); }
+            catch { return false; }
+        }
+    }
 
     public Location? LastKnownLocation => _lastKnown;
 

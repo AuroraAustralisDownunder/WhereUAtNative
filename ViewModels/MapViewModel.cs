@@ -147,27 +147,35 @@ public class MapViewModel : INotifyPropertyChanged
     public async Task OnAppearingAsync()
     {
         _isPageVisible = true;
-        _locationService.PositionChanged -= OnPositionChanged;
-        _locationService.PositionChanged += OnPositionChanged;
-
-        IsSharingEnabled = _locationService.IsSharingEnabled;
-
-        await _familyService.RefreshMembershipAsync();
-
-        if (_locationService.IsSharingEnabled)
+        try
         {
-            StatusMessage = "Getting your position…";
-            var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
-            ApplySelfLocation(location);
-        }
-        else
-        {
-            ClearSelfPin();
-        }
+            _locationService.PositionChanged -= OnPositionChanged;
+            _locationService.PositionChanged += OnPositionChanged;
 
-        await RefreshFamilyMarkersAsync();
-        UpdateStatusMessage();
-        StartFamilyPoll();
+            IsSharingEnabled = _locationService.IsSharingEnabled;
+
+            await _familyService.RefreshMembershipAsync();
+
+            if (_locationService.IsSharingEnabled)
+            {
+                StatusMessage = "Getting your position…";
+                var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
+                ApplySelfLocation(location);
+            }
+            else
+            {
+                ClearSelfPin();
+            }
+
+            await RefreshFamilyMarkersAsync();
+            UpdateStatusMessage();
+            StartFamilyPoll();
+        }
+        catch
+        {
+            // Missing token / RTDB / GPS must not crash map appearance.
+            try { UpdateStatusMessage(); } catch { /* ignore */ }
+        }
     }
 
     public void OnDisappearing()
