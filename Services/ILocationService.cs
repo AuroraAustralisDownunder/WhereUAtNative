@@ -14,6 +14,9 @@ public interface ILocationService
     /// <summary>Last successful fix while sharing is on; null otherwise.</summary>
     Location? LastKnownLocation { get; }
 
+    /// <summary>Friendly hint after the latest failed/pending fix (no precise coords).</summary>
+    string? LastFailureHint { get; }
+
     /// <summary>Raised when a new fix is obtained or when sharing is turned off (null).</summary>
     event EventHandler<Location?>? PositionChanged;
 

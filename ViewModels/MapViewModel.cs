@@ -288,7 +288,7 @@ public class MapViewModel : INotifyPropertyChanged
         if (location is null)
         {
             if (!HasSelfPin)
-                StatusMessage = "Waiting for GPS…";
+                StatusMessage = _locationService.LastFailureHint ?? "Getting GPS…";
             return;
         }
 
@@ -332,6 +332,13 @@ public class MapViewModel : INotifyPropertyChanged
     {
         if (!HasMapContent)
         {
+            if (_locationService.IsSharingEnabled)
+            {
+                StatusMessage = _locationService.LastFailureHint
+                    ?? "Getting GPS… If this lasts, turn on Location in system Settings or move near a window.";
+                return;
+            }
+
             if (!string.IsNullOrEmpty(_familyService.CurrentFamilyId))
                 StatusMessage = "No live locations yet. Tap the pin to share, or wait for family.";
             else
@@ -371,11 +378,40 @@ public class MapViewModel : INotifyPropertyChanged
     {
         try
         {
+            var tick = 0;
             while (!token.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(FamilyPollSeconds), token);
                 if (token.IsCancellationRequested || !_isPageVisible)
                     break;
+
+                tick++;
+
+                // Self GPS: retry every poll until we have a pin, then every ~15s while sharing stays on.
+                // (Previously only fetched on appear / toggle — a cold GPS miss left the pin blank forever.)
+                if (_locationService.IsSharingEnabled && (!HasSelfPin || tick % 3 == 0))
+                {
+                    try
+                    {
+                        var location = await _locationService.GetCurrentAsync(token);
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            ApplySelfLocation(location);
+                            if (!HasSelfPin && !string.IsNullOrWhiteSpace(_locationService.LastFailureHint))
+                                ToggleHint = _locationService.LastFailureHint;
+                            else if (HasSelfPin)
+                                ToggleHint = null;
+                        });
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        // GPS miss — keep polling.
+                    }
+                }
 
                 await RefreshFamilyMarkersAsync();
                 MainThread.BeginInvokeOnMainThread(() =>

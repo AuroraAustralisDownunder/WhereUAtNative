@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.6` (versionCode `9`) |
+| Display version | `0.2.7` (versionCode `10`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -38,7 +38,8 @@ Create (or use) a **Firebase Authentication** email/password user in the `whereu
 ## Location sharing (opt-in)
 
 - Sharing defaults to **Off** (device preference `location_sharing_enabled` = false).
-- The map **pin FAB** (mid-right, vertically centered / slightly high so Leaflet’s Unlock stays clear) toggles Share my location — green when on, muted when off. It requests **when-in-use** permission, then reads GPS.
+- The map **pin FAB** (mid-right, vertically centered / slightly high so Leaflet’s Unlock stays clear) toggles Share my location — green when on, muted when off. It requests **when-in-use** permission, then reads GPS. **Your self pin only appears while sharing is ON** (local display + optional family upload).
+- GPS cold starts: uses last-known when fresh, then Medium accuracy, then Low (network) fallback; while the map is open and sharing is on the app retries so a slow first fix does not leave the pin blank forever.
 - Coords shown on the map status chip / Settings are rounded (~4 decimal places) for a privacy-friendly display.
 - While sharing is on **and** you are in a family, the app writes your live position to Firebase Realtime Database under `families/{code}/locations/{uid}` (foreground only).
 - Turning sharing **Off**, leaving the family, or signing out removes your published location.
