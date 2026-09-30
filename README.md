@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.2` (versionCode `5`) |
+| Display version | `0.2.3` (versionCode `6`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -73,7 +73,7 @@ families/{familyId}/members/{uid} = { displayName, joinedAt }
 families/{familyId}/locations/{uid} = { lat, lon, updatedAt, displayName, sharing: true }
 ```
 
-`familyId` is the invite code (6 chars). The client only writes its own `users/{uid}` and `…/locations/{uid}` / `…/members/{uid}` nodes.
+`familyId` is the invite code (6 chars). Create writes the family root **with** `members/{uid}` in one PUT. Join writes only `members/{ownUid}` (cannot read the family until after joining). Location/member self-writes stay under the signed-in uid.
 
 ## Firebase console steps (required)
 
@@ -87,7 +87,9 @@ This release uses **Firebase Realtime Database** REST with the Auth ID token (no
 2. Build → **Realtime Database** → Create database (region **asia-southeast1** if prompted to match the URL above).
 3. Start in **locked mode**, then paste the rules below.
 
-### Starter security rules (paste in RTDB Rules)
+### Security rules (paste in RTDB Rules)
+
+Member-only family reads; create must include `members/{uid}` on first write; join writes only `members/{ownUid}` (no family read required beforehand).
 
 ```json
 {
@@ -100,8 +102,8 @@ This release uses **Firebase Realtime Database** REST with the Auth ID token (no
     },
     "families": {
       "$familyId": {
-        ".read": "auth != null",
-        ".write": "auth != null",
+        ".read": "auth != null && data.child('members').child(auth.uid).exists()",
+        ".write": "auth != null && ((!data.exists() && newData.child('members').child(auth.uid).exists()) || data.child('members').child(auth.uid).exists())",
         "members": {
           "$uid": {
             ".write": "auth != null && auth.uid == $uid"
@@ -118,7 +120,7 @@ This release uses **Firebase Realtime Database** REST with the Auth ID token (no
 }
 ```
 
-**Production should tighten these rules** so only members of a family may read that family’s `locations` / `members` (the starter rules above allow any signed-in user to read any family). The app already only writes the signed-in user’s own location and membership nodes, and sends the Auth ID token in the `Authorization: Bearer` header (never in the URL).
+The client matches these rules: **create** PUTs `families/{code}` atomically with `members/{uid}`; **join** PUTs only `families/{code}/members/{uid}` (then reads once membership grants access). Auth ID token is sent in the `Authorization: Bearer` header (never in the URL).
 
 > If you prefer Firestore instead: enable Firestore in the console and mirror the same collections (`users`, `families/{id}/members`, `families/{id}/locations`). This app build talks to **Realtime Database**, not Firestore.
 
@@ -148,7 +150,6 @@ The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles 
 
 ## Next up
 
-- Tighten RTDB rules so only family members can read a family’s locations
 - Background tracking only if product explicitly requires it
 
 ## Android release APK (Obtainium)
