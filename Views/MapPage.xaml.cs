@@ -9,6 +9,7 @@ public partial class MapPage : ContentPage
     private bool _mapReady;
     private string? _cachedHtml;
     private readonly HashSet<string> _renderedFamilyIds = new(StringComparer.Ordinal);
+    private int _syncGate;
 
     public MapPage(MapViewModel viewModel)
     {
@@ -17,6 +18,7 @@ public partial class MapPage : ContentPage
         BindingContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         _viewModel.MarkersChanged += OnMarkersChanged;
+        _viewModel.SelfPinChanged += OnSelfPinChanged;
         MapWebView.Navigating += OnMapWebViewNavigating;
     }
 
@@ -27,7 +29,7 @@ public partial class MapPage : ContentPage
         {
             await EnsureMapLoadedAsync();
             await _viewModel.OnAppearingAsync();
-            await SyncMapFromViewModelAsync();
+            await EnsureBridgeAndSyncAsync();
         }
         catch
         {
@@ -44,6 +46,11 @@ public partial class MapPage : ContentPage
     private void OnMarkersChanged(object? sender, EventArgs e)
     {
         MainThread.BeginInvokeOnMainThread(async () => await SyncFamilyMarkersAsync());
+    }
+
+    private void OnSelfPinChanged(object? sender, EventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(async () => await SyncSelfPinAsync(forceCenter: true));
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -63,7 +70,7 @@ public partial class MapPage : ContentPage
     {
         _mapReady = e.Result == WebNavigationResult.Success;
         if (_mapReady)
-            await SyncMapFromViewModelAsync();
+            await EnsureBridgeAndSyncAsync();
     }
 
     /// <summary>
@@ -107,38 +114,91 @@ public partial class MapPage : ContentPage
         return await reader.ReadToEndAsync();
     }
 
+    /// <summary>
+    /// Wait briefly for window.setPin to exist (Leaflet CDN + inline init), then sync markers.
+    /// </summary>
+    private async Task EnsureBridgeAndSyncAsync()
+    {
+        if (!_mapReady)
+            return;
+
+        for (var i = 0; i < 20; i++)
+        {
+            try
+            {
+                var ready = await MapWebView.EvaluateJavaScriptAsync(
+                    "(function(){ return (typeof window.setPin === 'function' && typeof window.upsertUser === 'function') ? '1' : '0'; })()");
+                if (ready is not null && ready.Contains('1'))
+                {
+                    await SyncMapFromViewModelAsync();
+                    return;
+                }
+            }
+            catch
+            {
+                // WebView not ready
+            }
+
+            await Task.Delay(100);
+        }
+
+        // Last attempt even if bridge check failed — Sync catches errors.
+        await SyncMapFromViewModelAsync();
+    }
+
     private async Task SyncMapFromViewModelAsync()
     {
         if (!_mapReady)
+            return;
+
+        if (Interlocked.CompareExchange(ref _syncGate, 1, 0) != 0)
             return;
 
         try
         {
             if (!_viewModel.HasMapContent)
             {
-                // Keep tiles visible under soft overlay; clear markers only.
                 var msg = EscapeJs(_viewModel.StatusMessage);
                 await MapWebView.EvaluateJavaScriptAsync($"clearPin('{msg}')");
                 _renderedFamilyIds.Clear();
                 return;
             }
 
-            if (_viewModel.HasSelfPin)
-            {
-                var lat = _viewModel.PinLatitude.ToString(CultureInfo.InvariantCulture);
-                var lon = _viewModel.PinLongitude.ToString(CultureInfo.InvariantCulture);
-                await MapWebView.EvaluateJavaScriptAsync($"setPin({lat}, {lon})");
-            }
-            else
-            {
-                await MapWebView.EvaluateJavaScriptAsync("removeUser('self')");
-            }
-
+            await SyncSelfPinAsync(forceCenter: false);
             await SyncFamilyMarkersAsync();
         }
         catch
         {
             // WebView may not be ready yet — ignore.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _syncGate, 0);
+        }
+    }
+
+    private async Task SyncSelfPinAsync(bool forceCenter)
+    {
+        if (!_mapReady)
+            return;
+
+        try
+        {
+            if (_viewModel.HasSelfPin)
+            {
+                var lat = _viewModel.PinLatitude.ToString(CultureInfo.InvariantCulture);
+                var lon = _viewModel.PinLongitude.ToString(CultureInfo.InvariantCulture);
+                var centerFlag = forceCenter ? "true" : "false";
+                await MapWebView.EvaluateJavaScriptAsync($"setPin({lat}, {lon}, {centerFlag})");
+            }
+            else if (_viewModel.HasMapContent)
+            {
+                await MapWebView.EvaluateJavaScriptAsync("removeUser('self')");
+            }
+        }
+        catch
+        {
+            // ignore WebView race
         }
     }
 

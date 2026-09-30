@@ -39,8 +39,10 @@ public class MapViewModel : INotifyPropertyChanged
     public bool HasSelfPin
     {
         get => _hasSelfPin;
-        set
+        private set
         {
+            if (_hasSelfPin == value)
+                return;
             _hasSelfPin = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasMapContent));
@@ -68,13 +70,13 @@ public class MapViewModel : INotifyPropertyChanged
     public double PinLatitude
     {
         get => _pinLatitude;
-        set { _pinLatitude = value; OnPropertyChanged(); }
+        private set { _pinLatitude = value; OnPropertyChanged(); }
     }
 
     public double PinLongitude
     {
         get => _pinLongitude;
-        set { _pinLongitude = value; OnPropertyChanged(); }
+        private set { _pinLongitude = value; OnPropertyChanged(); }
     }
 
     public bool IsSharingEnabled
@@ -129,6 +131,9 @@ public class MapViewModel : INotifyPropertyChanged
     /// <summary>Raised when family marker set changes so the page can sync the WebView.</summary>
     public event EventHandler? MarkersChanged;
 
+    /// <summary>Raised when self pin lat/lon should be (re)injected into the WebView.</summary>
+    public event EventHandler? SelfPinChanged;
+
     public ICommand ToggleSharingCommand { get; }
     public ICommand SignOutCommand { get; }
     public ICommand OpenSettingsCommand { get; }
@@ -158,13 +163,15 @@ public class MapViewModel : INotifyPropertyChanged
 
             if (_locationService.IsSharingEnabled)
             {
-                StatusMessage = "Getting your position…";
+                StatusMessage = _locationService.LastFailureHint ?? "Sharing on — waiting for GPS…";
+                ToggleHint = HasSelfPin ? null : StatusMessage;
                 var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
                 ApplySelfLocation(location);
             }
             else
             {
                 ClearSelfPin();
+                ToggleHint = null;
             }
 
             await RefreshFamilyMarkersAsync();
@@ -173,7 +180,6 @@ public class MapViewModel : INotifyPropertyChanged
         }
         catch
         {
-            // Missing token / RTDB / GPS must not crash map appearance.
             try { UpdateStatusMessage(); } catch { /* ignore */ }
         }
     }
@@ -217,7 +223,8 @@ public class MapViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                ToggleHint = message;
+                // Keep a visible waiting hint until the first fix arrives (listener or poll).
+                ToggleHint = message ?? _locationService.LastFailureHint ?? "Sharing on — waiting for GPS…";
                 var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
                 ApplySelfLocation(location);
                 UpdateStatusMessage();
@@ -288,18 +295,45 @@ public class MapViewModel : INotifyPropertyChanged
         if (location is null)
         {
             if (!HasSelfPin)
-                StatusMessage = _locationService.LastFailureHint ?? "Getting GPS…";
+            {
+                StatusMessage = _locationService.LastFailureHint ?? "Sharing on — waiting for GPS…";
+                ToggleHint = StatusMessage;
+            }
             return;
         }
 
-        PinLatitude = location.Latitude;
-        PinLongitude = location.Longitude;
-        HasSelfPin = true;
+        // Set fields then raise once so MapPage does not sync mid-update (lat without lon / clearPin race).
+        _pinLatitude = location.Latitude;
+        _pinLongitude = location.Longitude;
+        var wasPinned = _hasSelfPin;
+        _hasSelfPin = true;
+
+        OnPropertyChanged(nameof(PinLatitude));
+        OnPropertyChanged(nameof(PinLongitude));
+        if (!wasPinned)
+        {
+            OnPropertyChanged(nameof(HasSelfPin));
+            OnPropertyChanged(nameof(HasMapContent));
+            OnPropertyChanged(nameof(ShowEmptyOverlay));
+        }
+
+        ToggleHint = null;
+        SelfPinChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ClearSelfPin()
     {
-        HasSelfPin = false;
+        if (!_hasSelfPin)
+        {
+            SelfPinChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        _hasSelfPin = false;
+        OnPropertyChanged(nameof(HasSelfPin));
+        OnPropertyChanged(nameof(HasMapContent));
+        OnPropertyChanged(nameof(ShowEmptyOverlay));
+        SelfPinChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private async Task RefreshFamilyMarkersAsync()
@@ -335,10 +369,13 @@ public class MapViewModel : INotifyPropertyChanged
             if (_locationService.IsSharingEnabled)
             {
                 StatusMessage = _locationService.LastFailureHint
-                    ?? "Getting GPS… If this lasts, turn on Location in system Settings or move near a window.";
+                    ?? "Sharing on — waiting for GPS… If this lasts, check Location mode or move near a window.";
+                if (!HasSelfPin)
+                    ToggleHint ??= StatusMessage;
                 return;
             }
 
+            ToggleHint = null;
             if (!string.IsNullOrEmpty(_familyService.CurrentFamilyId))
                 StatusMessage = "No live locations yet. Tap the pin to share, or wait for family.";
             else
@@ -387,13 +424,13 @@ public class MapViewModel : INotifyPropertyChanged
 
                 tick++;
 
-                // Self GPS: retry every poll until we have a pin, then every ~15s while sharing stays on.
-                // (Previously only fetched on appear / toggle — a cold GPS miss left the pin blank forever.)
+                // Self GPS: retry until pinned, then every ~15s. Do NOT pass the poll token into
+                // GetCurrentAsync — cancelling the poll must not abort an in-flight GPS ladder.
                 if (_locationService.IsSharingEnabled && (!HasSelfPin || tick % 3 == 0))
                 {
                     try
                     {
-                        var location = await _locationService.GetCurrentAsync(token);
+                        var location = await _locationService.GetCurrentAsync(CancellationToken.None);
                         MainThread.BeginInvokeOnMainThread(() =>
                         {
                             ApplySelfLocation(location);
