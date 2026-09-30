@@ -15,6 +15,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     private readonly IAuthService _authService;
     private readonly ILocationService _locationService;
     private readonly IFamilyService _familyService;
+    private readonly ICrashLogService _crashLog;
 
     private string _accountEmail = "Signed in";
     private bool _isBusy;
@@ -24,6 +25,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     private string? _familyHint;
     private string _joinCodeInput = string.Empty;
     private bool _isInFamily;
+    private string? _crashLogHint;
 
     public string AccountEmail
     {
@@ -43,6 +45,9 @@ public class SettingsViewModel : INotifyPropertyChanged
             ((Command)JoinFamilyCommand).ChangeCanExecute();
             ((Command)LeaveFamilyCommand).ChangeCanExecute();
             ((Command)CloseCommand).ChangeCanExecute();
+            ((Command)ShareCrashLogCommand).ChangeCanExecute();
+            ((Command)CopyCrashLogCommand).ChangeCanExecute();
+            ((Command)ClearCrashLogCommand).ChangeCanExecute();
         }
     }
 
@@ -95,6 +100,20 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     public bool IsFamilyHintVisible => !string.IsNullOrWhiteSpace(FamilyHint);
 
+    public string? CrashLogHint
+    {
+        get => _crashLogHint;
+        set
+        {
+            _crashLogHint = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCrashLogHintVisible));
+        }
+    }
+
+    public bool IsCrashLogHintVisible => !string.IsNullOrWhiteSpace(CrashLogHint);
+
+
     public string JoinCodeInput
     {
         get => _joinCodeInput;
@@ -107,16 +126,23 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ICommand JoinFamilyCommand { get; }
     public ICommand LeaveFamilyCommand { get; }
     public ICommand CloseCommand { get; }
+    public ICommand ShareCrashLogCommand { get; }
+    public ICommand CopyCrashLogCommand { get; }
+    public ICommand ClearCrashLogCommand { get; }
 
-    public SettingsViewModel(IAuthService authService, ILocationService locationService, IFamilyService familyService)
+    public SettingsViewModel(IAuthService authService, ILocationService locationService, IFamilyService familyService, ICrashLogService crashLog)
     {
         _authService = authService;
         _locationService = locationService;
         _familyService = familyService;
+        _crashLog = crashLog;
         CreateFamilyCommand = new Command(async () => await CreateFamilyAsync(), () => !IsBusy);
         JoinFamilyCommand = new Command(async () => await JoinFamilyAsync(), () => !IsBusy);
         LeaveFamilyCommand = new Command(async () => await LeaveFamilyAsync(), () => !IsBusy);
         CloseCommand = new Command(async () => await CloseAsync(), () => !IsBusy);
+        ShareCrashLogCommand = new Command(async () => await ShareCrashLogAsync(), () => !IsBusy);
+        CopyCrashLogCommand = new Command(async () => await CopyCrashLogAsync(), () => !IsBusy);
+        ClearCrashLogCommand = new Command(async () => await ClearCrashLogAsync(), () => !IsBusy);
         ApplyFamilyStateFromService();
         UpdateLocationStatus();
     }
@@ -251,6 +277,95 @@ public class SettingsViewModel : INotifyPropertyChanged
             else
                 FamilyHint = "Left family.";
             await RefreshFamilyUiAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+
+    private async Task ShareCrashLogAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            CrashLogHint = null;
+            var text = await _crashLog.ReadTailAsync();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                CrashLogHint = "No crash log entries yet.";
+                return;
+            }
+
+            var filePath = Path.Combine(FileSystem.CacheDirectory, "whereuat-crash.log");
+            await File.WriteAllTextAsync(filePath, text);
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = "Where U At crash log",
+                File = new ShareFile(filePath)
+            });
+            CrashLogHint = "Share sheet opened — paste or send to the developer.";
+        }
+        catch (Exception ex)
+        {
+            _crashLog.LogError("ShareCrashLog failed", ex);
+            CrashLogHint = "Could not share crash log.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task CopyCrashLogAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            CrashLogHint = null;
+            var text = await _crashLog.ReadTailAsync();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                CrashLogHint = "No crash log entries yet.";
+                return;
+            }
+
+            await Clipboard.Default.SetTextAsync(text);
+            CrashLogHint = "Crash log copied to clipboard.";
+        }
+        catch (Exception ex)
+        {
+            _crashLog.LogError("CopyCrashLog failed", ex);
+            CrashLogHint = "Could not copy crash log.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task ClearCrashLogAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            await _crashLog.ClearAsync();
+            CrashLogHint = "Crash log cleared.";
+        }
+        catch (Exception ex)
+        {
+            CrashLogHint = "Could not clear crash log.";
+            try { _crashLog.LogError("ClearCrashLog failed", ex); } catch { /* ignore */ }
         }
         finally
         {
