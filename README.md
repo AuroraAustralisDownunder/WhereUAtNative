@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.5` (versionCode `8`) |
+| Display version | `0.2.6` (versionCode `9`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -133,11 +133,24 @@ The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles 
 - Tap a marker to lock/follow; Unlock on the bottom bar releases follow.
 - Leaflet JS/CSS load from the unpkg CDN; OSM tiles need network access.
 
+
+## Crash / error log (on-device)
+
+Fatal and Error events (uncaught exceptions, unobserved tasks, Android unhandled exceptions, and caught startup failures) append to a **local** JSONL file:
+
+`FileSystem.AppDataDirectory/crash.log`
+
+- **Not uploaded** to Firebase or any server.
+- Redacts passwords, tokens/JWTs, `?auth=` query values, and precise lat/lon (5+ decimal places).
+- Rotates at ~256 KB (keeps the newest half).
+- In **Settings → Diagnostics**, use **Share crash log** / **Copy crash log** to send the last ~48 KB to the developer, or **Clear crash log**.
+
 ## Privacy defaults (this release)
 
 - Credentials / tokens are never logged; Firebase ID tokens for RTDB REST use the `?auth=` query parameter over HTTPS (Bearer is for OAuth access tokens only). Avoid logging full request URLs.
 - Login failures show a generic message (no raw exception text).
 - Precise location is never logged.
+- On-device crash log only (Settings → Share/Copy); never auto-uploaded.
 - Location is not requested until the user turns sharing on.
 - No background / Always location.
 - Location upload only while sharing is ON and the user is in a family; cleared on share-off / leave / sign-out.

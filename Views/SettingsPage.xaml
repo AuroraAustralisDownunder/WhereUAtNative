@@ -138,6 +138,52 @@
                 </VerticalStackLayout>
             </Border>
 
+
+            <Border Stroke="#3A3A3C"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    BackgroundColor="#2C2C2E"
+                    Padding="16">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Diagnostics"
+                           FontAttributes="Bold"
+                           FontSize="16"
+                           TextColor="#FFFFFF" />
+                    <Label Text="Crash log stays on this device only (never uploaded). It omits passwords, tokens, and precise coordinates. Share or copy it so the developer can see what failed."
+                           FontSize="13"
+                           TextColor="#AEAEB2"
+                           LineBreakMode="WordWrap" />
+                    <Label Text="{Binding CrashLogHint}"
+                           FontSize="13"
+                           TextColor="#FFB74D"
+                           IsVisible="{Binding IsCrashLogHintVisible}"
+                           LineBreakMode="WordWrap" />
+                    <Button Text="Share crash log"
+                            BackgroundColor="#3A3A3C"
+                            TextColor="White"
+                            CornerRadius="10"
+                            HeightRequest="44"
+                            Command="{Binding ShareCrashLogCommand}"
+                            IsEnabled="{Binding IsNotBusy}" />
+                    <Button Text="Copy crash log"
+                            BackgroundColor="#3A3A3C"
+                            TextColor="White"
+                            CornerRadius="10"
+                            HeightRequest="44"
+                            Command="{Binding CopyCrashLogCommand}"
+                            IsEnabled="{Binding IsNotBusy}" />
+                    <Button Text="Clear crash log"
+                            BackgroundColor="#2C2C2E"
+                            TextColor="#AEAEB2"
+                            BorderColor="#3A3A3C"
+                            BorderWidth="1"
+                            CornerRadius="10"
+                            HeightRequest="44"
+                            Command="{Binding ClearCrashLogCommand}"
+                            IsEnabled="{Binding IsNotBusy}" />
+                </VerticalStackLayout>
+            </Border>
+
             <ActivityIndicator IsRunning="{Binding IsBusy}"
                                IsVisible="{Binding IsBusy}"
                                Color="#4CAF50"

@@ -6,11 +6,13 @@ namespace WhereUAtNative;
 public partial class AppShell : Shell
 {
     private readonly IAuthService _authService;
+    private readonly ICrashLogService _crashLog;
     private bool _startupNavigationDone;
 
-    public AppShell(IAuthService authService, LoginPage loginPage, MapPage mapPage)
+    public AppShell(IAuthService authService, ICrashLogService crashLog, LoginPage loginPage, MapPage mapPage)
     {
         _authService = authService;
+        _crashLog = crashLog;
         InitializeComponent();
 
         // Resolve pages from DI so ViewModels are injected (Shell DataTemplate would not).
@@ -40,6 +42,7 @@ public partial class AppShell : Shell
     /// <summary>
     /// First-frame routing. async void must NEVER throw — nested try/catch so a failed
     /// Map navigation or stale Firebase session falls back to Login without crashing.
+    /// Caught failures are written to the on-device crash log (not rethrown).
     /// </summary>
     private async void OnShellLoaded(object? sender, EventArgs e)
     {
@@ -55,9 +58,10 @@ public partial class AppShell : Shell
             {
                 signedIn = _authService.IsSignedIn;
             }
-            catch
+            catch (Exception ex)
             {
                 // Firebase not ready / token missing / native NRE — treat as logged out.
+                _crashLog.LogError("Startup: IsSignedIn check failed", ex);
                 signedIn = false;
             }
 
@@ -68,9 +72,10 @@ public partial class AppShell : Shell
                     await GoToAsync("//MapPage");
                     return;
                 }
-                catch
+                catch (Exception ex)
                 {
                     // Navigation race or page already attached — fall through to Login.
+                    _crashLog.LogError("Startup: GoTo MapPage failed", ex);
                 }
             }
 
@@ -78,14 +83,16 @@ public partial class AppShell : Shell
             {
                 await GoToAsync("//LoginPage");
             }
-            catch
+            catch (Exception ex)
             {
                 // Already on Login or Shell not ready — stay put; never crash.
+                _crashLog.LogError("Startup: GoTo LoginPage failed", ex);
             }
         }
-        catch
+        catch (Exception ex)
         {
             // Absolute last resort for async void handlers.
+            _crashLog.LogError("Startup: OnShellLoaded unexpected failure", ex);
         }
     }
 }
