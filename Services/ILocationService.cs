@@ -31,6 +31,14 @@ public interface ILocationService
     Task DisableSharingAsync();
 
     /// <summary>
+    /// Cold-start / session-restore: if the sharing preference is already on, re-validate
+    /// permission and start the foreground listener the same way as EnableSharingAsync
+    /// (brief listener wait before one-shots). No-op when sharing is off. Turns sharing
+    /// off if permission is missing.
+    /// </summary>
+    Task ResumeSharingIfEnabledAsync();
+
+    /// <summary>
     /// Gets a current position when sharing is enabled. Returns null if sharing is off,
     /// permission is missing, GPS is unavailable, or the request fails. Never throws to callers.
     /// </summary>

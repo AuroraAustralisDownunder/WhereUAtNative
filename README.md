@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.11` (versionCode `14`) |
+| Display version | `0.2.12` (versionCode `15`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -39,7 +39,7 @@ Create (or use) a **Firebase Authentication** email/password user in the `whereu
 
 - Sharing defaults to **Off** (device preference `location_sharing_enabled` = false).
 - The map **pin FAB** (mid-right, vertically centered / slightly high so Leaflet’s Unlock stays clear) toggles Share my location — green when on, muted when off. It requests **when-in-use** permission, then reads GPS. **Your self pin only appears while sharing is ON** (local display + optional family upload).
-- GPS cold starts: starts a **foreground location listener** (Medium accuracy, matching the working v0.1.1 path) when sharing turns on, accepts last-known (up to ~30 min), then Medium→Low→Lowest one-shots. Status shows **“Sharing on — waiting for GPS…”** until a fix, then **“Fix acquired — centering…”**, then your coords **only after** the map has `flyTo`/lock-followed you at neighbourhood zoom (~16) (not world/default-country view). If the WebView was not ready, the pin is queued and re-injected until `isSelfCentered` confirms lock + zoom ≥ 14.
+- GPS cold starts / session restore: when Share my location was left **On**, cold open re-inits the **foreground location listener** (Medium) with a brief listener wait before one-shots — same path as tapping the pin (avoids the restore race that hung GPS while the map WebView was still loading). Accepts last-known (up to ~30 min), then Medium→Low→Lowest one-shots. Status shows **“Sharing on — waiting for GPS…”** until a fix, then **“Fix acquired — centering…”**, then your coords once the self marker is on the Leaflet map (`hasUser('self')`). If the WebView was not ready, the pin is queued and re-injected when the bridge is up.
 - Coords shown on the map status chip / Settings are rounded (~4 decimal places) for a privacy-friendly display.
 - While sharing is on **and** you are in a family, the app writes your live position to Firebase Realtime Database under `families/{code}/locations/{uid}` (foreground only).
 - Turning sharing **Off**, leaving the family, or signing out removes your published location.

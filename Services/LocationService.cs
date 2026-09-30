@@ -8,6 +8,8 @@ namespace WhereUAtNative.Services;
 /// Opt-in location. Preference defaults to false. Server upload handled by LocationSyncService when in a family.
 /// Uses StartListeningForeground (Medium) plus a simple one-shot ladder — Best accuracy was starving
 /// indoor/network fixes and racing the listener on Android (regression after v0.1.1 Medium path).
+/// Session restore must call ResumeSharingIfEnabledAsync (listener-first) — raw GetCurrentAsync on a
+/// cold process with preference=true raced one-shots against a just-started listener and hung GPS.
 /// </summary>
 public sealed class LocationService : ILocationService
 {
@@ -106,6 +108,65 @@ public sealed class LocationService : ILocationService
         FailFirstFixWait();
     }
 
+    /// <summary>
+    /// Session restore: preference may still say sharing is ON while in-memory listener
+    /// state is cold. Mirror EnableSharingAsync (permission + listener + brief wait) so we
+    /// do not immediately race StartListeningForeground with one-shot GetLocationAsync —
+    /// that race is the cold-open GPS hang/retry loop. Fresh login + pin tap uses
+    /// EnableSharingAsync and works; restore must take the same init path.
+    /// </summary>
+    public async Task ResumeSharingIfEnabledAsync()
+    {
+        if (!IsSharingEnabled)
+            return;
+
+        try
+        {
+            var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+            if (status != PermissionStatus.Granted)
+                status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+
+            if (status != PermissionStatus.Granted)
+            {
+                SetSharingEnabled(false);
+                ClearLastKnown();
+                _lastFailureHint = "Permission needed — allow location in system Settings, then tap the pin again.";
+                return;
+            }
+
+            if (!IsDeviceLocationEnabled())
+            {
+                // Keep preference — user opted in; device GPS may be temporarily off.
+                await StopListeningSafeAsync();
+                _lastFailureHint = "Device location is off — turn on GPS/Location in system Settings.";
+                return;
+            }
+
+            // Already have a fresh in-memory fix from this process — keep listening, skip ladder.
+            if (_lastKnown is not null && DateTimeOffset.UtcNow - _lastAcceptUtc < MinFreshInterval)
+            {
+                await StartListeningSafeAsync();
+                return;
+            }
+
+            _attemptCount = 0;
+            _lastFailureHint = "Sharing on — waiting for GPS fix…";
+
+            await StartListeningSafeAsync();
+
+            var fromListener = await WaitForFirstListenerFixAsync(TimeSpan.FromSeconds(3));
+            if (fromListener is not null)
+                return;
+
+            // Listener had a head start; one-shots are now a fallback (same as EnableSharingAsync).
+            _ = await GetCurrentAsync();
+        }
+        catch (Exception)
+        {
+            _lastFailureHint ??= "Unable to resume location sharing — tap the pin or retry.";
+        }
+    }
+
     public async Task<Location?> GetCurrentAsync(CancellationToken cancellationToken = default)
     {
         if (!IsSharingEnabled)
@@ -129,7 +190,11 @@ public sealed class LocationService : ILocationService
                 return null;
             }
 
+            // Track whether this call is the one that starts the listener — one-shots
+            // immediately after StartListeningForeground race the fused provider on Android.
+            var wasListening = _listening || Geolocation.Default.IsListeningForeground;
             await StartListeningSafeAsync();
+            var startedNow = !wasListening && (_listening || Geolocation.Default.IsListeningForeground);
 
             if (_lastKnown is not null && DateTimeOffset.UtcNow - _lastAcceptUtc < MinFreshInterval)
                 return _lastKnown;
@@ -140,6 +205,14 @@ public sealed class LocationService : ILocationService
                 AcceptFix(cached);
                 MaybeRefine(cancellationToken);
                 return cached;
+            }
+
+            // Brief listener head-start before one-shots (same idea as EnableSharingAsync).
+            if (startedNow)
+            {
+                var fromListener = await WaitForFirstListenerFixAsync(TimeSpan.FromSeconds(2));
+                if (fromListener is not null)
+                    return fromListener;
             }
 
             Interlocked.Increment(ref _attemptCount);
