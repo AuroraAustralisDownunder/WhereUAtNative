@@ -170,8 +170,12 @@ public class MapViewModel : INotifyPropertyChanged
                     StatusMessage = _locationService.LastFailureHint ?? "Sharing on — waiting for GPS…";
                     ToggleHint = StatusMessage;
                 }
-                var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
-                ApplySelfLocation(location);
+                // Preference survived process death but listener/in-memory state did not.
+                // ResumeSharingIfEnabledAsync mirrors EnableSharingAsync (listener-first)
+                // instead of raw GetCurrentAsync which races one-shots on cold open.
+                await _locationService.ResumeSharingIfEnabledAsync();
+                IsSharingEnabled = _locationService.IsSharingEnabled;
+                ApplySelfLocation(_locationService.LastKnownLocation);
             }
             else
             {

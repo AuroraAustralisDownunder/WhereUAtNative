@@ -37,9 +37,15 @@ public partial class MapPage : ContentPage
         {
             _centeredOnSelf = false;
             await EnsureMapLoadedAsync();
-            await _viewModel.OnAppearingAsync();
-            // Probe Leaflet bridge (do not require Navigated alone) then sync once.
-            await EnsureBridgeAndSyncAsync(forceSelfCenter: true);
+
+            // Cold session-restore used to await GPS (up to tens of seconds) BEFORE the
+            // Leaflet bridge probe, so the restored map landed with sharing re-enabled
+            // while the WebView was still loading CDN/init. Run bridge + VM in parallel;
+            // then sync again once a fix may exist.
+            var bridgeTask = EnsureBridgeAndSyncAsync(forceSelfCenter: true);
+            var vmTask = _viewModel.OnAppearingAsync();
+            await Task.WhenAll(bridgeTask, vmTask);
+            await EnsureBridgeAndSyncAsync(forceSelfCenter: !_centeredOnSelf);
         }
         catch
         {
