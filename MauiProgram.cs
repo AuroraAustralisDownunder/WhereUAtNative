@@ -33,8 +33,15 @@ public static class MauiProgram
 #endif
 
         var app = builder.Build();
-        // Start forwarding opt-in GPS → family RTDB (no-op until sharing + family).
-        app.Services.GetRequiredService<LocationSyncService>().Start();
+        try
+        {
+            // Start forwarding opt-in GPS → family RTDB (no-op until sharing + family).
+            app.Services.GetRequiredService<LocationSyncService>().Start();
+        }
+        catch
+        {
+            // Preferences / DI must not kill process during CreateMauiApp.
+        }
         return app;
     }
 
@@ -65,12 +72,28 @@ public static class MauiProgram
 #if IOS
             events.AddiOS(iOS => iOS.WillFinishLaunching((app, dict) =>
             {
-                CrossFirebase.Initialize();
+                try
+                {
+                    CrossFirebase.Initialize();
+                }
+                catch
+                {
+                    // Missing plist / double-init must not abort launch.
+                }
                 return true;
             }));
 #elif ANDROID
             events.AddAndroid(android => android.OnCreate((activity, state) =>
-                CrossFirebase.Initialize(activity, () => Platform.CurrentActivity)));
+            {
+                try
+                {
+                    CrossFirebase.Initialize(activity, () => Platform.CurrentActivity!);
+                }
+                catch
+                {
+                    // Missing google-services / double-init must not abort launch.
+                }
+            }));
 #endif
         });
     }

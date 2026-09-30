@@ -97,7 +97,14 @@ public sealed class FirebaseAuthService : IAuthService
 
     public async Task SignOutAsync()
     {
-        await CrossFirebaseAuth.Current.SignOutAsync();
+        try
+        {
+            await CrossFirebaseAuth.Current.SignOutAsync();
+        }
+        catch
+        {
+            // Native sign-out can fail if Firebase never initialized — treat as signed out.
+        }
     }
 
     public async Task<string?> GetIdTokenAsync(bool forceRefresh = false)

@@ -31,11 +31,16 @@ public partial class AppShell : Shell
         });
 
         // Settings is pushed onto the navigation stack from the map toolbar.
+        // Type is registered in DI; Shell resolves via the service provider when possible.
         Routing.RegisterRoute(nameof(SettingsPage), typeof(SettingsPage));
 
         Loaded += OnShellLoaded;
     }
 
+    /// <summary>
+    /// First-frame routing. async void must NEVER throw — nested try/catch so a failed
+    /// Map navigation or stale Firebase session falls back to Login without crashing.
+    /// </summary>
     private async void OnShellLoaded(object? sender, EventArgs e)
     {
         if (_startupNavigationDone)
@@ -45,14 +50,42 @@ public partial class AppShell : Shell
 
         try
         {
-            if (_authService.IsSignedIn)
-                await GoToAsync("//MapPage");
-            else
+            var signedIn = false;
+            try
+            {
+                signedIn = _authService.IsSignedIn;
+            }
+            catch
+            {
+                // Firebase not ready / token missing / native NRE — treat as logged out.
+                signedIn = false;
+            }
+
+            if (signedIn)
+            {
+                try
+                {
+                    await GoToAsync("//MapPage");
+                    return;
+                }
+                catch
+                {
+                    // Navigation race or page already attached — fall through to Login.
+                }
+            }
+
+            try
+            {
                 await GoToAsync("//LoginPage");
+            }
+            catch
+            {
+                // Already on Login or Shell not ready — stay put; never crash.
+            }
         }
         catch
         {
-            await GoToAsync("//LoginPage");
+            // Absolute last resort for async void handlers.
         }
     }
 }

@@ -23,9 +23,16 @@ public partial class MapPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await EnsureMapLoadedAsync();
-        await _viewModel.OnAppearingAsync();
-        await SyncMapFromViewModelAsync();
+        try
+        {
+            await EnsureMapLoadedAsync();
+            await _viewModel.OnAppearingAsync();
+            await SyncMapFromViewModelAsync();
+        }
+        catch
+        {
+            // async void — never crash the first map frame (auth/token/WebView races).
+        }
     }
 
     protected override void OnDisappearing()
@@ -83,7 +90,7 @@ public partial class MapPage : ContentPage
             _cachedHtml ??= await LoadMapHtmlAsync();
             MapWebView.Source = new HtmlWebViewSource { Html = _cachedHtml };
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             System.Diagnostics.Debug.WriteLine("Failed to load map.html from app package.");
             MapWebView.Source = new HtmlWebViewSource

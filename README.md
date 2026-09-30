@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.4` (versionCode `7`) |
+| Display version | `0.2.5` (versionCode `8`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -159,7 +159,7 @@ Release builds are signed with a local keystore at `keystore/whereuat-release.jk
 ```bash
 export WHEREUAT_KEYSTORE_PASS=...
 export WHEREUAT_KEY_PASS=...
-dotnet publish -f net10.0-android -c Release -p:AndroidPackageFormat=apk
+dotnet publish -f net10.0-android -c Release -r android-arm64 -p:AndroidPackageFormat=apk
 ```
 
 Package id: `com.familytracker.whereuat`. Install via [Obtainium](https://github.com/ImranR98/Obtainium) from GitHub Releases.
