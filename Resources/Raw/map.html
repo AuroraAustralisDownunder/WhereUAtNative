@@ -31,45 +31,41 @@
     .leaflet-tile-pane { z-index: 200 !important; }
     .leaflet-overlay-pane { z-index: 400 !important; }
     .leaflet-shadow-pane { z-index: 500 !important; }
-    .leaflet-marker-pane { z-index: 660 !important; }
-    .leaflet-tooltip-pane { z-index: 680 !important; }
-    .leaflet-popup-pane { z-index: 700 !important; }
-    .leaflet-map-pane svg { z-index: 650; }
+    .leaflet-marker-pane { z-index: 850 !important; }
+    .leaflet-tooltip-pane { z-index: 900 !important; }
+    .leaflet-popup-pane { z-index: 950 !important; }
+    .leaflet-map-pane svg { z-index: 700; }
 
     .user-div-icon {
       background: transparent !important;
       border: none !important;
       overflow: visible !important;
     }
+
+    /* Family member avatars */
     .user-marker {
-      width: 44px;
-      height: 44px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
       background: #4CAF50;
       border: 3px solid #FFFFFF;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.6), 0 0 0 3px rgba(76,175,80,0.4);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.55);
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
       font-family: system-ui, -apple-system, sans-serif;
       font-weight: 700;
-      font-size: 16px;
+      font-size: 15px;
       cursor: pointer;
       box-sizing: border-box;
-      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
       position: relative;
-      z-index: 1000;
       pointer-events: auto;
-    }
-    .user-marker.self-marker {
-      background: #2E7D32;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.65), 0 0 0 4px rgba(76,175,80,0.45);
     }
     .user-marker.locked {
       border-color: #FFD54F;
       box-shadow: 0 0 0 3px rgba(255, 213, 79, 0.55), 0 2px 8px rgba(0,0,0,0.5);
-      transform: scale(1.12);
+      transform: scale(1.1);
     }
     .user-marker-label {
       position: absolute;
@@ -87,7 +83,87 @@
       white-space: nowrap;
       pointer-events: none;
       box-shadow: 0 1px 4px rgba(0,0,0,0.35);
-      z-index: 1001;
+    }
+
+    /* Large unmistakable SELF pin — teardrop + pulse (NOT the FAB). */
+    .you-pin-wrap {
+      background: transparent !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+    .you-pin {
+      position: relative;
+      width: 56px;
+      height: 72px;
+      pointer-events: auto;
+    }
+    .you-pin-pulse {
+      position: absolute;
+      left: 50%;
+      top: 22px;
+      width: 28px;
+      height: 28px;
+      margin-left: -14px;
+      margin-top: -14px;
+      border-radius: 50%;
+      background: rgba(255, 23, 68, 0.35);
+      animation: you-pulse 1.6s ease-out infinite;
+      z-index: 0;
+    }
+    @keyframes you-pulse {
+      0%   { transform: scale(0.6); opacity: 0.9; }
+      70%  { transform: scale(2.4); opacity: 0; }
+      100% { transform: scale(2.4); opacity: 0; }
+    }
+    .you-pin-head {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 48px;
+      height: 48px;
+      margin-left: -24px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      background: linear-gradient(135deg, #FF5252 0%, #D50000 100%);
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.55), 0 0 0 4px rgba(255, 23, 68, 0.35);
+      z-index: 1;
+      box-sizing: border-box;
+    }
+    .you-pin-head-inner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: rotate(45deg);
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    }
+    .you-pin.locked .you-pin-head {
+      border-color: #FFD54F;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.55), 0 0 0 4px rgba(255, 213, 79, 0.5);
+    }
+    .you-pin-caption {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      background: #FF1744;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 10px;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      border: 2px solid #fff;
+      z-index: 2;
     }
 
     #lock-bar {
@@ -141,7 +217,7 @@
   <script>
     (function () {
       var map = null;
-      var users = {}; // id -> { marker, lat, lon, label }
+      var users = {}; // id -> { marker, ring, lat, lon, label }
       var lockedUserId = null;
       var autoLockedSelf = false;
       var emptyEl = document.getElementById('empty');
@@ -175,16 +251,18 @@
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
         try {
-          // Explicit pane stacking — markers above tiles (Leaflet defaults are fine; reinforce).
           var tilePane = map.getPane('tilePane');
           var markerPane = map.getPane('markerPane');
+          var overlayPane = map.getPane('overlayPane');
           var shadowPane = map.getPane('shadowPane');
           if (tilePane) tilePane.style.zIndex = 200;
+          if (overlayPane) overlayPane.style.zIndex = 400;
           if (shadowPane) shadowPane.style.zIndex = 500;
-          if (markerPane) markerPane.style.zIndex = 660;
+          if (markerPane) markerPane.style.zIndex = 850;
         } catch (e) { /* ignore */ }
-        setTimeout(function () { map.invalidateSize(); }, 100);
-        setTimeout(function () { if (map) map.invalidateSize(); }, 400);
+        setTimeout(function () { map.invalidateSize(true); }, 100);
+        setTimeout(function () { if (map) map.invalidateSize(true); }, 400);
+        setTimeout(function () { if (map) map.invalidateSize(true); }, 1000);
         return map;
       }
 
@@ -204,6 +282,13 @@
           if (!u || !u.marker) return;
           var el = u.marker.getElement();
           if (!el) return;
+          if (id === 'self') {
+            var pin = el.querySelector('.you-pin');
+            if (!pin) return;
+            if (id === lockedUserId) pin.classList.add('locked');
+            else pin.classList.remove('locked');
+            return;
+          }
           var avatar = el.querySelector('.user-marker');
           if (!avatar) return;
           if (id === lockedUserId) avatar.classList.add('locked');
@@ -216,17 +301,31 @@
         return current;
       }
 
+      /** Invalidate size then fly/set to latlng. forceZoom16 always uses neighbourhood zoom. */
+      function flyToLatLng(latlng, forceZoom16, animate) {
+        if (!map || !latlng) return;
+        try { map.invalidateSize(true); } catch (e) { /* ignore */ }
+        var z = forceZoom16 ? 16 : preferredZoom(map.getZoom());
+        var doAnimate = animate !== false;
+        // When still at world/city zoom, always hard-jump to 16 (do not panTo at zoom 2).
+        if (forceZoom16 || !isFinite(map.getZoom()) || map.getZoom() < 14) {
+          try {
+            if (doAnimate) map.flyTo(latlng, z, { animate: true, duration: 0.8 });
+            else map.setView(latlng, z, { animate: false });
+          } catch (e2) {
+            try { map.setView(latlng, z, { animate: doAnimate }); } catch (e3) { /* ignore */ }
+          }
+        } else {
+          try { map.panTo(latlng, { animate: doAnimate, duration: 0.35 }); } catch (e4) { /* ignore */ }
+        }
+      }
+
       function centerOnLocked(animate) {
         if (!lockedUserId || !users[lockedUserId] || !map) return;
         var u = users[lockedUserId];
         var latlng = L.latLng(u.lat, u.lon);
-        var z = preferredZoom(map.getZoom());
-        // Always setView when zoom is world/city level so first fix actually centers (v0.1.1 UX).
-        if (animate === false || map.getZoom() < 14) {
-          map.setView(latlng, z, { animate: animate !== false });
-        } else {
-          map.panTo(latlng, { animate: true, duration: 0.35 });
-        }
+        // While locked, never leave world/country view — bump to neighbourhood if needed.
+        flyToLatLng(latlng, map.getZoom() < 14, animate);
       }
 
       function setLock(id) {
@@ -249,29 +348,56 @@
         unlock();
       });
 
-      function makeIcon(id, label, isLocked) {
-        var initial = initialFor(label);
-        var selfClass = id === 'self' ? ' self-marker' : '';
+      function makeSelfIcon(isLocked) {
+        var lockedClass = isLocked ? ' locked' : '';
         var html =
-          '<div class="user-marker' + selfClass + (isLocked ? ' locked' : '') + '">' + escapeHtml(initial) + '</div>' +
+          '<div class="you-pin' + lockedClass + '">' +
+            '<div class="you-pin-pulse"></div>' +
+            '<div class="you-pin-head"><div class="you-pin-head-inner">You</div></div>' +
+            '<div class="you-pin-caption">You are here</div>' +
+          '</div>';
+        return L.divIcon({
+          className: 'you-pin-wrap',
+          html: html,
+          iconSize: [56, 72],
+          iconAnchor: [28, 68],
+          popupAnchor: [0, -60]
+        });
+      }
+
+      function makeIcon(id, label, isLocked) {
+        if (id === 'self') return makeSelfIcon(isLocked);
+        var initial = initialFor(label);
+        var html =
+          '<div class="user-marker' + (isLocked ? ' locked' : '') + '">' + escapeHtml(initial) + '</div>' +
           '<div class="user-marker-label">' + escapeHtml(label) + '</div>';
         return L.divIcon({
           className: 'user-div-icon',
           html: html,
-          iconSize: [44, 44],
-          iconAnchor: [22, 22],
-          popupAnchor: [0, -24]
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
+          popupAnchor: [0, -22]
         });
       }
 
-      function showMapIfNeeded() {
+      function ensureSelfRing(latlng) {
         ensureMap();
-        emptyEl.classList.remove('visible');
-        if (Object.keys(users).length === 0) {
-          lockBar.classList.remove('visible');
-          return false;
+        var existing = users['self'];
+        if (existing && existing.ring) {
+          existing.ring.setLatLng(latlng);
+          return existing.ring;
         }
-        return true;
+        // Canvas/SVG fallback ring so a pin is ALWAYS visible even if DivIcon mis-renders.
+        var ring = L.circleMarker(latlng, {
+          radius: 14,
+          color: '#FFFFFF',
+          weight: 3,
+          fillColor: '#FF1744',
+          fillOpacity: 0.85,
+          opacity: 1,
+          pane: 'overlayPane'
+        }).addTo(map);
+        return ring;
       }
 
       window.upsertUser = function (id, lat, lon, label) {
@@ -293,19 +419,25 @@
           existing.marker.setLatLng(latlng);
           existing.marker.setIcon(makeIcon(id, label, id === lockedUserId));
           existing.marker.setPopupContent(escapeHtml(label));
-          if (id === 'self') existing.marker.setZIndexOffset(2000);
+          if (id === 'self') {
+            existing.marker.setZIndexOffset(4000);
+            if (existing.ring) existing.ring.setLatLng(latlng);
+            else existing.ring = ensureSelfRing(latlng);
+          }
         } else {
           var marker = L.marker(latlng, {
             icon: makeIcon(id, label, id === lockedUserId),
             keyboard: true,
             riseOnHover: true,
-            zIndexOffset: id === 'self' ? 2000 : 100
+            zIndexOffset: id === 'self' ? 4000 : 100
           }).addTo(map);
           marker.bindPopup(escapeHtml(label));
           marker.on('click', function () {
             setLock(id);
           });
-          users[id] = { marker: marker, lat: lat, lon: lon, label: label };
+          var ring = null;
+          if (id === 'self') ring = ensureSelfRing(latlng);
+          users[id] = { marker: marker, ring: ring, lat: lat, lon: lon, label: label };
         }
 
         if (id === lockedUserId) {
@@ -313,8 +445,6 @@
           updateLockBar();
           centerOnLocked(true);
         }
-
-        setTimeout(function () { if (map) map.invalidateSize(); }, 50);
         return '1';
       };
 
@@ -323,6 +453,7 @@
         var u = users[id];
         if (!u) return;
         if (map && u.marker) map.removeLayer(u.marker);
+        if (map && u.ring) map.removeLayer(u.ring);
         delete users[id];
         if (lockedUserId === id) unlock();
         if (Object.keys(users).length === 0) {
@@ -335,6 +466,7 @@
         Object.keys(users).forEach(function (id) {
           var u = users[id];
           if (map && u.marker) map.removeLayer(u.marker);
+          if (map && u.ring) map.removeLayer(u.ring);
         });
         users = {};
         lockedUserId = null;
@@ -345,7 +477,8 @@
       window.setPin = function (lat, lon, forceCenter) {
         lat = Number(lat);
         lon = Number(lon);
-        forceCenter = !!forceCenter;
+        // MAUI EvaluateJavaScript may pass booleans as strings.
+        forceCenter = (forceCenter === true || forceCenter === 'true' || forceCenter === 1 || forceCenter === '1');
         if (!isFinite(lat) || !isFinite(lon)) {
           return '0';
         }
@@ -353,20 +486,43 @@
         if (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) {
           return '0';
         }
+        ensureMap();
         var first = !users['self'];
+        var needFirstCenter = first || forceCenter || !autoLockedSelf;
+        // Upsert without auto-centering yet (we drive flyTo below so first fix never pans at zoom 2).
+        var prevLock = lockedUserId;
+        if (needFirstCenter) lockedUserId = null; // prevent upsertUser→centerOnLocked(panTo@zoom2)
         window.upsertUser('self', lat, lon, 'You');
+        lockedUserId = prevLock;
 
-        // Restore v0.1.1 UX: first successful fix ALWAYS lock-follows + neighbourhood zoom.
-        if (first || forceCenter) {
+        // First fix OR forced: ALWAYS lock-follow + neighbourhood zoom 16 (v0.1.1 UX).
+        if (needFirstCenter) {
           autoLockedSelf = true;
-          setLock('self');
-          ensureMap();
-          map.setView(L.latLng(lat, lon), preferredZoom(map.getZoom()), { animate: true });
+          lockedUserId = 'self';
+          refreshMarkerStyles();
+          updateLockBar();
+          flyToLatLng(L.latLng(lat, lon), true, true);
+          // Hard retries: WebView often has 0 size on first paint; invalidate+setView after layout.
+          setTimeout(function () {
+            if (!map || !users['self'] || lockedUserId !== 'self') return;
+            flyToLatLng(L.latLng(users['self'].lat, users['self'].lon), true, false);
+          }, 120);
+          setTimeout(function () {
+            if (!map || !users['self'] || lockedUserId !== 'self') return;
+            if (map.getZoom() < 14) {
+              flyToLatLng(L.latLng(users['self'].lat, users['self'].lon), true, false);
+            }
+          }, 450);
+          setTimeout(function () {
+            if (!map || !users['self'] || lockedUserId !== 'self') return;
+            if (map.getZoom() < 14) {
+              try { map.setView(L.latLng(users['self'].lat, users['self'].lon), 16, { animate: false }); } catch (e) { /* ignore */ }
+            }
+          }, 900);
         } else if (lockedUserId === 'self') {
           centerOnLocked(true);
         }
 
-        setTimeout(function () { if (map) map.invalidateSize(); }, 50);
         return users['self'] ? '1' : '0';
       };
 
@@ -374,7 +530,6 @@
         window.clearUsers();
         ensureMap();
         emptyEl.classList.remove('visible');
-        // Keep OSM tiles visible; native soft overlay shows the empty-state message.
       };
 
       window.showEmpty = function (message) {
@@ -384,14 +539,42 @@
       window.lockUser = function (id) { setLock(String(id)); };
       window.unlockUser = function () { unlock(); };
       window.hasUser = function (id) { return !!users[String(id == null ? '' : id)]; };
+
+      /** '1' only when self pin exists, lock-followed, and map is at neighbourhood zoom (not world/country). */
+      window.isSelfCentered = function () {
+        try {
+          if (!map || !users['self']) return '0';
+          if (lockedUserId !== 'self') return '0';
+          var z = map.getZoom();
+          if (!isFinite(z) || z < 14) return '0';
+          var c = map.getCenter();
+          var u = users['self'];
+          if (!c || !isFinite(c.lat) || !isFinite(c.lng)) return '0';
+          // ~0.05° ≈ a few km — enough to reject null-island / wrong-country hover.
+          if (Math.abs(c.lat - u.lat) > 0.05 || Math.abs(c.lng - u.lon) > 0.05) return '0';
+          return '1';
+        } catch (e) {
+          return '0';
+        }
+      };
+
       window.getDebugState = function () {
         try {
+          var self = users['self'];
+          var c = map ? map.getCenter() : null;
           return JSON.stringify({
-            self: !!users['self'],
+            self: !!self,
             lock: lockedUserId,
             zoom: map ? map.getZoom() : -1,
             n: Object.keys(users).length,
-            auto: autoLockedSelf
+            auto: autoLockedSelf,
+            lat: self ? self.lat : null,
+            lon: self ? self.lon : null,
+            centerLat: c ? c.lat : null,
+            centerLon: c ? c.lng : null,
+            centered: window.isSelfCentered() === '1',
+            hasMarkerEl: !!(self && self.marker && self.marker.getElement()),
+            hasRing: !!(self && self.ring)
           });
         } catch (e) {
           return '{}';
