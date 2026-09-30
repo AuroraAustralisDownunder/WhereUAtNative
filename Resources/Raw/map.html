@@ -488,21 +488,34 @@
         }
         ensureMap();
         var first = !users['self'];
-        var needFirstCenter = first || forceCenter || !autoLockedSelf;
+        var alreadyNeighborhood = false;
+        try {
+          alreadyNeighborhood = !!(map && lockedUserId === 'self' && autoLockedSelf &&
+            isFinite(map.getZoom()) && map.getZoom() >= 14 && users['self']);
+          if (alreadyNeighborhood) {
+            var c = map.getCenter();
+            var u = users['self'];
+            if (!c || Math.abs(c.lat - u.lat) > 0.05 || Math.abs(c.lng - u.lon) > 0.05)
+              alreadyNeighborhood = false;
+          }
+        } catch (e0) { alreadyNeighborhood = false; }
+
+        // First fix or forced center when not yet at neighbourhood zoom. Skip re-fly storms.
+        var needFirstCenter = first || ((forceCenter || !autoLockedSelf) && !alreadyNeighborhood);
         // Upsert without auto-centering yet (we drive flyTo below so first fix never pans at zoom 2).
         var prevLock = lockedUserId;
         if (needFirstCenter) lockedUserId = null; // prevent upsertUser→centerOnLocked(panTo@zoom2)
         window.upsertUser('self', lat, lon, 'You');
         lockedUserId = prevLock;
 
-        // First fix OR forced: ALWAYS lock-follow + neighbourhood zoom 16 (v0.1.1 UX).
+        // First fix OR forced: lock-follow + neighbourhood zoom 16 (v0.1.1 UX).
+        // Layout retries stay inside JS only — C# must not poll isSelfCentered (v0.2.10 hang).
         if (needFirstCenter) {
           autoLockedSelf = true;
           lockedUserId = 'self';
           refreshMarkerStyles();
           updateLockBar();
           flyToLatLng(L.latLng(lat, lon), true, true);
-          // Hard retries: WebView often has 0 size on first paint; invalidate+setView after layout.
           setTimeout(function () {
             if (!map || !users['self'] || lockedUserId !== 'self') return;
             flyToLatLng(L.latLng(users['self'].lat, users['self'].lon), true, false);
@@ -521,6 +534,13 @@
           }, 900);
         } else if (lockedUserId === 'self') {
           centerOnLocked(true);
+        } else if (forceCenter || !autoLockedSelf) {
+          // Already neighbourhood-centered; keep lock without re-flying.
+          autoLockedSelf = true;
+          lockedUserId = 'self';
+          refreshMarkerStyles();
+          updateLockBar();
+          centerOnLocked(false);
         }
 
         return users['self'] ? '1' : '0';

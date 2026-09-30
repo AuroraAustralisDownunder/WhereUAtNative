@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.10` (versionCode `13`) |
+| Display version | `0.2.11` (versionCode `14`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
