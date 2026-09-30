@@ -6,7 +6,8 @@ namespace WhereUAtNative.Services;
 
 /// <summary>
 /// Opt-in location. Preference defaults to false. Server upload handled by LocationSyncService when in a family.
-/// Uses one-shot Geolocation plus StartListeningForeground so slow/cold GPS still surfaces a fix.
+/// Uses StartListeningForeground (Medium) plus a simple one-shot ladder — Best accuracy was starving
+/// indoor/network fixes and racing the listener on Android (regression after v0.1.1 Medium path).
 /// </summary>
 public sealed class LocationService : ILocationService
 {
@@ -16,7 +17,7 @@ public sealed class LocationService : ILocationService
     private static readonly TimeSpan LastKnownMaxAge = TimeSpan.FromMinutes(30);
 
     /// <summary>Skip starting another fresh request if we already accepted a fix this recently.</summary>
-    private static readonly TimeSpan MinFreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan MinFreshInterval = TimeSpan.FromSeconds(4);
 
     private Location? _lastKnown;
     private string? _lastFailureHint;
@@ -25,6 +26,7 @@ public sealed class LocationService : ILocationService
     private int _oneShotInFlight;
     private bool _listening;
     private int _attemptCount;
+    private TaskCompletionSource<Location?>? _firstFixTcs;
 
     public bool IsSharingEnabled
     {
@@ -73,6 +75,11 @@ public sealed class LocationService : ILocationService
             // Continuous updates are the reliable path on Android; one-shot alone often times out.
             await StartListeningSafeAsync();
 
+            // Brief wait for the listener's first sample before heavy one-shots.
+            var fromListener = await WaitForFirstListenerFixAsync(TimeSpan.FromSeconds(3));
+            if (fromListener is not null)
+                return (true, null);
+
             var location = await GetCurrentAsync();
             if (location is null)
                 return (true, _lastFailureHint ?? "Sharing on — waiting for GPS fix…");
@@ -96,6 +103,7 @@ public sealed class LocationService : ILocationService
         ClearLastKnown();
         _lastFailureHint = null;
         _attemptCount = 0;
+        FailFirstFixWait();
     }
 
     public async Task<Location?> GetCurrentAsync(CancellationToken cancellationToken = default)
@@ -143,22 +151,17 @@ public sealed class LocationService : ILocationService
 
             try
             {
-                // When the foreground listener is running, keep one-shots short — the listener
-                // will deliver the real fix. Without a listener, walk a fuller accuracy ladder.
-                Location? fresh;
-                if (_listening || Geolocation.Default.IsListeningForeground)
+                // Restore v0.1.1-style Medium-first ladder. Best accuracy often waits forever
+                // indoors and races StartListeningForeground on Android.
+                Location? fresh =
+                    await RequestFixAsync(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(12), cancellationToken)
+                    ?? await RequestFixAsync(GeolocationAccuracy.Low, TimeSpan.FromSeconds(12), cancellationToken)
+                    ?? await RequestFixAsync(GeolocationAccuracy.Lowest, TimeSpan.FromSeconds(10), cancellationToken);
+
+                // Only try High if still nothing and not already listening (listener will deliver).
+                if (fresh is null && !(_listening || Geolocation.Default.IsListeningForeground))
                 {
-                    fresh =
-                        await RequestFixAsync(GeolocationAccuracy.Best, TimeSpan.FromSeconds(8), cancellationToken)
-                        ?? await RequestFixAsync(GeolocationAccuracy.Low, TimeSpan.FromSeconds(8), cancellationToken);
-                }
-                else
-                {
-                    fresh =
-                        await RequestFixAsync(GeolocationAccuracy.Best, TimeSpan.FromSeconds(12), cancellationToken)
-                        ?? await RequestFixAsync(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10), cancellationToken)
-                        ?? await RequestFixAsync(GeolocationAccuracy.Low, TimeSpan.FromSeconds(12), cancellationToken)
-                        ?? await RequestFixAsync(GeolocationAccuracy.Lowest, TimeSpan.FromSeconds(10), cancellationToken);
+                    fresh = await RequestFixAsync(GeolocationAccuracy.High, TimeSpan.FromSeconds(10), cancellationToken);
                 }
 
                 if (fresh is not null)
@@ -223,21 +226,28 @@ public sealed class LocationService : ILocationService
             Geolocation.Default.ListeningFailed -= OnListeningFailed;
             Geolocation.Default.ListeningFailed += OnListeningFailed;
 
-            var request = new GeolocationListeningRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(5));
+            // Medium matches the working v0.1.1 one-shot path; Best starved network fixes.
+            var request = new GeolocationListeningRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(3));
+            _firstFixTcs = new TaskCompletionSource<Location?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var started = await Geolocation.Default.StartListeningForegroundAsync(request);
             _listening = started || Geolocation.Default.IsListeningForeground;
             if (!_listening)
+            {
                 _lastFailureHint ??= "Could not start GPS listener — retrying one-shot…";
+                FailFirstFixWait();
+            }
         }
         catch (FeatureNotEnabledException)
         {
             _lastFailureHint = "Device location is off — turn on GPS/Location in system Settings.";
             _listening = false;
+            FailFirstFixWait();
         }
         catch (PermissionException)
         {
             _lastFailureHint = "Location permission was revoked.";
             _listening = false;
+            FailFirstFixWait();
         }
         catch (InvalidOperationException)
         {
@@ -248,7 +258,34 @@ public sealed class LocationService : ILocationService
         {
             _listening = Geolocation.Default.IsListeningForeground;
             _lastFailureHint ??= "GPS listener unavailable — using one-shot requests.";
+            FailFirstFixWait();
         }
+    }
+
+    private async Task<Location?> WaitForFirstListenerFixAsync(TimeSpan timeout)
+    {
+        var tcs = _firstFixTcs;
+        if (tcs is null)
+            return _lastKnown;
+
+        try
+        {
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(timeout));
+            if (completed == tcs.Task)
+                return await tcs.Task;
+        }
+        catch
+        {
+            // ignore
+        }
+
+        return _lastKnown;
+    }
+
+    private void FailFirstFixWait()
+    {
+        try { _firstFixTcs?.TrySetResult(null); } catch { /* ignore */ }
+        _firstFixTcs = null;
     }
 
     private Task StopListeningSafeAsync()
@@ -267,6 +304,7 @@ public sealed class LocationService : ILocationService
         finally
         {
             _listening = false;
+            FailFirstFixWait();
         }
 
         return Task.CompletedTask;
@@ -289,6 +327,7 @@ public sealed class LocationService : ILocationService
             GeolocationError.PositionUnavailable => "GPS unavailable — move near a window or check Location mode.",
             _ => "GPS listener failed — retrying…"
         };
+        FailFirstFixWait();
 
         if (IsSharingEnabled)
             _ = RestartListeningSoonAsync();
@@ -403,6 +442,7 @@ public sealed class LocationService : ILocationService
         _lastKnown = location;
         _lastAcceptUtc = DateTimeOffset.UtcNow;
         _lastFailureHint = null;
+        try { _firstFixTcs?.TrySetResult(location); } catch { /* ignore */ }
         PositionChanged?.Invoke(this, location);
     }
 

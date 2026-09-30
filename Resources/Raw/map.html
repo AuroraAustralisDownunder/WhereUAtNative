@@ -27,30 +27,44 @@
     .empty.visible { display: flex; }
     #map.hidden { display: none; }
 
+    /* Keep Leaflet panes ordered: tiles under markers (defaults ~200 / ~600). */
+    .leaflet-tile-pane { z-index: 200 !important; }
+    .leaflet-overlay-pane { z-index: 400 !important; }
+    .leaflet-shadow-pane { z-index: 500 !important; }
+    .leaflet-marker-pane { z-index: 660 !important; }
+    .leaflet-tooltip-pane { z-index: 680 !important; }
+    .leaflet-popup-pane { z-index: 700 !important; }
+    .leaflet-map-pane svg { z-index: 650; }
+
     .user-div-icon {
       background: transparent !important;
       border: none !important;
       overflow: visible !important;
     }
     .user-marker {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       background: #4CAF50;
       border: 3px solid #FFFFFF;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.55), 0 0 0 2px rgba(76,175,80,0.35);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.6), 0 0 0 3px rgba(76,175,80,0.4);
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
       font-family: system-ui, -apple-system, sans-serif;
       font-weight: 700;
-      font-size: 15px;
+      font-size: 16px;
       cursor: pointer;
       box-sizing: border-box;
       transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
       position: relative;
       z-index: 1000;
+      pointer-events: auto;
+    }
+    .user-marker.self-marker {
+      background: #2E7D32;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.65), 0 0 0 4px rgba(76,175,80,0.45);
     }
     .user-marker.locked {
       border-color: #FFD54F;
@@ -73,6 +87,7 @@
       white-space: nowrap;
       pointer-events: none;
       box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+      z-index: 1001;
     }
 
     #lock-bar {
@@ -154,16 +169,22 @@
         if (map) return map;
         mapEl.classList.remove('hidden');
         emptyEl.classList.remove('visible');
-        map = L.map('map', { zoomControl: true }).setView([0, 0], 2);
+        map = L.map('map', { zoomControl: true, preferCanvas: false }).setView([0, 0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
         try {
-          var pane = map.getPane('markerPane');
-          if (pane) pane.style.zIndex = 650;
+          // Explicit pane stacking — markers above tiles (Leaflet defaults are fine; reinforce).
+          var tilePane = map.getPane('tilePane');
+          var markerPane = map.getPane('markerPane');
+          var shadowPane = map.getPane('shadowPane');
+          if (tilePane) tilePane.style.zIndex = 200;
+          if (shadowPane) shadowPane.style.zIndex = 500;
+          if (markerPane) markerPane.style.zIndex = 660;
         } catch (e) { /* ignore */ }
         setTimeout(function () { map.invalidateSize(); }, 100);
+        setTimeout(function () { if (map) map.invalidateSize(); }, 400);
         return map;
       }
 
@@ -200,11 +221,9 @@
         var u = users[lockedUserId];
         var latlng = L.latLng(u.lat, u.lon);
         var z = preferredZoom(map.getZoom());
-        // Keep user's zoom if already neighbourhood-level; bump only when too far out.
-        if (animate === false) {
-          map.setView(latlng, z, { animate: false });
-        } else if (map.getZoom() < 14) {
-          map.setView(latlng, 16, { animate: true });
+        // Always setView when zoom is world/city level so first fix actually centers (v0.1.1 UX).
+        if (animate === false || map.getZoom() < 14) {
+          map.setView(latlng, z, { animate: animate !== false });
         } else {
           map.panTo(latlng, { animate: true, duration: 0.35 });
         }
@@ -232,15 +251,16 @@
 
       function makeIcon(id, label, isLocked) {
         var initial = initialFor(label);
+        var selfClass = id === 'self' ? ' self-marker' : '';
         var html =
-          '<div class="user-marker' + (isLocked ? ' locked' : '') + '">' + escapeHtml(initial) + '</div>' +
+          '<div class="user-marker' + selfClass + (isLocked ? ' locked' : '') + '">' + escapeHtml(initial) + '</div>' +
           '<div class="user-marker-label">' + escapeHtml(label) + '</div>';
         return L.divIcon({
           className: 'user-div-icon',
           html: html,
-          iconSize: [40, 40],
-          iconAnchor: [20, 20],
-          popupAnchor: [0, -22]
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
+          popupAnchor: [0, -24]
         });
       }
 
@@ -256,10 +276,10 @@
 
       window.upsertUser = function (id, lat, lon, label) {
         id = String(id == null ? '' : id);
-        if (!id) return;
+        if (!id) return '0';
         lat = Number(lat);
         lon = Number(lon);
-        if (!isFinite(lat) || !isFinite(lon)) return;
+        if (!isFinite(lat) || !isFinite(lon)) return '0';
         label = (label == null || label === '') ? id : String(label);
 
         ensureMap();
@@ -273,12 +293,13 @@
           existing.marker.setLatLng(latlng);
           existing.marker.setIcon(makeIcon(id, label, id === lockedUserId));
           existing.marker.setPopupContent(escapeHtml(label));
+          if (id === 'self') existing.marker.setZIndexOffset(2000);
         } else {
           var marker = L.marker(latlng, {
             icon: makeIcon(id, label, id === lockedUserId),
             keyboard: true,
             riseOnHover: true,
-            zIndexOffset: id === 'self' ? 1000 : 0
+            zIndexOffset: id === 'self' ? 2000 : 100
           }).addTo(map);
           marker.bindPopup(escapeHtml(label));
           marker.on('click', function () {
@@ -294,6 +315,7 @@
         }
 
         setTimeout(function () { if (map) map.invalidateSize(); }, 50);
+        return '1';
       };
 
       window.removeUser = function (id) {
@@ -325,28 +347,27 @@
         lon = Number(lon);
         forceCenter = !!forceCenter;
         if (!isFinite(lat) || !isFinite(lon)) {
-          window.clearPin('Waiting for GPS…');
-          return;
+          return '0';
         }
         // Reject null-island so a bad fix does not look like "pin missing in Australia"
         if (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) {
-          return;
+          return '0';
         }
         var first = !users['self'];
         window.upsertUser('self', lat, lon, 'You');
-        if (first && !autoLockedSelf) {
+
+        // Restore v0.1.1 UX: first successful fix ALWAYS lock-follows + neighbourhood zoom.
+        if (first || forceCenter) {
           autoLockedSelf = true;
           setLock('self');
-          // setLock -> centerOnLocked bumps to neighbourhood zoom 16
-        } else if (forceCenter || lockedUserId === 'self') {
-          if (forceCenter && lockedUserId !== 'self') setLock('self');
-          else centerOnLocked(true);
-        } else if (first) {
-          // First fix without lock: neighbourhood/street zoom
           ensureMap();
-          map.setView(L.latLng(lat, lon), 16);
+          map.setView(L.latLng(lat, lon), preferredZoom(map.getZoom()), { animate: true });
+        } else if (lockedUserId === 'self') {
+          centerOnLocked(true);
         }
+
         setTimeout(function () { if (map) map.invalidateSize(); }, 50);
+        return users['self'] ? '1' : '0';
       };
 
       window.clearPin = function (message) {
@@ -362,6 +383,20 @@
 
       window.lockUser = function (id) { setLock(String(id)); };
       window.unlockUser = function () { unlock(); };
+      window.hasUser = function (id) { return !!users[String(id == null ? '' : id)]; };
+      window.getDebugState = function () {
+        try {
+          return JSON.stringify({
+            self: !!users['self'],
+            lock: lockedUserId,
+            zoom: map ? map.getZoom() : -1,
+            n: Object.keys(users).length,
+            auto: autoLockedSelf
+          });
+        } catch (e) {
+          return '{}';
+        }
+      };
 
       // Always show tiles; native UI owns empty-state messaging.
       ensureMap();
@@ -370,7 +405,7 @@
       try {
         var params = new URLSearchParams(window.location.search || '');
         if (params.has('lat') && params.has('lon')) {
-          window.setPin(params.get('lat'), params.get('lon'));
+          window.setPin(params.get('lat'), params.get('lon'), true);
         }
       } catch (e) { /* ignore */ }
     })();
