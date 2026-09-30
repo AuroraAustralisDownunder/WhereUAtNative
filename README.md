@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.3` (versionCode `6`) |
+| Display version | `0.2.4` (versionCode `7`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -120,7 +120,7 @@ Member-only family reads; create must include `members/{uid}` on first write; jo
 }
 ```
 
-The client matches these rules: **create** PUTs `families/{code}` atomically with `members/{uid}`; **join** PUTs only `families/{code}/members/{uid}` (then reads once membership grants access). Auth ID token is sent in the `Authorization: Bearer` header (never in the URL).
+The client matches these rules: **create** PUTs `families/{code}` atomically with `members/{uid}`; **join** PUTs only `families/{code}/members/{uid}` (then reads once membership grants access). Firebase **ID tokens** are sent as the RTDB REST `?auth=` query parameter (HTTPS). Do **not** use `Authorization: Bearer` for ID tokens — that header is only for Google OAuth2 access tokens.
 
 > If you prefer Firestore instead: enable Firestore in the console and mirror the same collections (`users`, `families/{id}/members`, `families/{id}/locations`). This app build talks to **Realtime Database**, not Firestore.
 
@@ -135,7 +135,7 @@ The map UI uses a **WebView** with **Leaflet** and free **OpenStreetMap** tiles 
 
 ## Privacy defaults (this release)
 
-- Credentials / tokens are never logged; Auth ID tokens are sent only as `Authorization: Bearer` over HTTPS (not in query strings).
+- Credentials / tokens are never logged; Firebase ID tokens for RTDB REST use the `?auth=` query parameter over HTTPS (Bearer is for OAuth access tokens only). Avoid logging full request URLs.
 - Login failures show a generic message (no raw exception text).
 - Precise location is never logged.
 - Location is not requested until the user turns sharing on.

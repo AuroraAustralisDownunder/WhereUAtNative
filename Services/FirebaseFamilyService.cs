@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Maui.Storage;
@@ -76,6 +75,8 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
             // Create must PUT the family root WITH members/{uid} in the same write so
             // !data.exists() && newData.child('members').child(auth.uid).exists() passes.
             // Collisions (code taken) fail the write; retry with a new code.
+            // Permission/auth failures are not collisions — surface them immediately.
+            Exception? lastTransient = null;
             for (var attempt = 0; attempt < 8; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -98,8 +99,15 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
                     }
                 });
 
-                if (!await PutAsync($"families/{code}.json", familyPayload, cancellationToken))
+                try
+                {
+                    await PutAsync($"families/{code}.json", familyPayload, cancellationToken);
+                }
+                catch (RtdbHttpException http) when (IsLikelyCodeCollision(http))
+                {
+                    lastTransient = http;
                     continue;
+                }
 
                 var userPayload = JsonSerializer.Serialize(new
                 {
@@ -112,17 +120,26 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
                 return (code, null);
             }
 
-            return (null, "Could not allocate a family code. Try again.");
+            return (null, lastTransient is null
+                ? "Could not allocate a family code. Try again."
+                : MapCreateError(lastTransient));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            return (null, "Could not create family. Check your connection and that Realtime Database is enabled.");
+            return (null, MapCreateError(ex));
         }
     }
+
+    /// <summary>
+    /// Invite-code collision: existing family makes !data.exists() fail → RTDB "Permission denied".
+    /// Unauthorized (bad/missing ID token) is not a collision and must not be retried.
+    /// </summary>
+    private static bool IsLikelyCodeCollision(RtdbHttpException http) =>
+        http.IsPermissionDenied && !http.IsUnauthorized;
 
     public async Task<string?> JoinFamilyAsync(string code, CancellationToken cancellationToken = default)
     {
@@ -132,7 +149,7 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
 
         code = NormalizeCode(code);
         if (!IsValidInviteCode(code))
-            return "Enter a valid 6-character family code.";
+            return "Invalid code. Enter the 6-character family invite (letters/digits, no 0/O/1/I).";
 
         if (!string.IsNullOrEmpty(_familyId))
             return "Leave your current family before joining another.";
@@ -150,18 +167,20 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
                 displayName,
                 joinedAt = now
             });
-            if (!await PutAsync($"families/{code}/members/{uid}.json", memberPayload, cancellationToken))
-                return "Could not join family. Check the code and Realtime Database rules.";
+            await PutAsync($"families/{code}/members/{uid}.json", memberPayload, cancellationToken);
 
             string familyJson;
             try
             {
                 familyJson = await GetAsync($"families/{code}.json", cancellationToken);
             }
-            catch
+            catch (Exception verifyEx)
             {
                 await TryDeleteMemberAsync(code, uid, cancellationToken);
-                return "Could not verify family after join.";
+                var mapped = MapJoinError(verifyEx);
+                return mapped.StartsWith("No network", StringComparison.Ordinal)
+                    ? "Could not verify family after join (no network)."
+                    : mapped;
             }
 
             if (IsJsonNull(familyJson) || !FamilyLooksValid(familyJson))
@@ -180,13 +199,13 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
             SetFamilyId(code);
             return null;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            return "Could not join family. Check your connection.";
+            return MapJoinError(ex);
         }
     }
 
@@ -415,35 +434,44 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
 
     private async Task<string> GetAsync(string path, CancellationToken ct)
     {
-        using var request = await CreateAuthorizedRequestAsync(HttpMethod.Get, path, ct);
-        using var response = await _http.SendAsync(request, ct);
+        var url = await BuildAuthenticatedUrlAsync(path, ct);
+        using var response = await _http.GetAsync(url, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"GET {path} failed: {(int)response.StatusCode}");
+            throw new RtdbHttpException(response.StatusCode, $"GET {path} failed: {(int)response.StatusCode}", body);
         return body;
     }
 
-    private async Task<bool> PutAsync(string path, string jsonBody, CancellationToken ct)
+    private async Task PutAsync(string path, string jsonBody, CancellationToken ct)
     {
-        using var request = await CreateAuthorizedRequestAsync(HttpMethod.Put, path, ct);
-        request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-        using var response = await _http.SendAsync(request, ct);
-        return response.IsSuccessStatusCode;
+        var url = await BuildAuthenticatedUrlAsync(path, ct);
+        using var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+        using var response = await _http.PutAsync(url, content, ct);
+        if (response.IsSuccessStatusCode)
+            return;
+
+        var body = await response.Content.ReadAsStringAsync(ct);
+        throw new RtdbHttpException(response.StatusCode, $"PUT {path} failed: {(int)response.StatusCode}", body);
     }
 
     private async Task DeleteAsync(string path, CancellationToken ct)
     {
-        using var request = await CreateAuthorizedRequestAsync(HttpMethod.Delete, path, ct);
-        using var response = await _http.SendAsync(request, ct);
+        var url = await BuildAuthenticatedUrlAsync(path, ct);
+        using var response = await _http.DeleteAsync(url, ct);
         // 404 is fine
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
-            throw new InvalidOperationException($"DELETE {path} failed: {(int)response.StatusCode}");
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new RtdbHttpException(response.StatusCode, $"DELETE {path} failed: {(int)response.StatusCode}", body);
+        }
     }
 
     /// <summary>
-    /// Auth ID token goes only in the Authorization header over HTTPS — never in the URL/query.
+    /// Firebase ID tokens must use the <c>auth</c> query parameter on the RTDB REST API.
+    /// <c>Authorization: Bearer</c> is only for Google OAuth2 access tokens (admin), not ID tokens.
+    /// Transit is HTTPS so the query string is encrypted; avoid logging full URLs.
     /// </summary>
-    private async Task<HttpRequestMessage> CreateAuthorizedRequestAsync(HttpMethod method, string path, CancellationToken ct)
+    private async Task<string> BuildAuthenticatedUrlAsync(string path, CancellationToken ct)
     {
         var token = await _auth.GetIdTokenAsync(false);
         if (string.IsNullOrEmpty(token))
@@ -453,10 +481,63 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
             throw new InvalidOperationException("Not authenticated.");
 
         var trimmed = path.TrimStart('/');
-        var url = $"{DatabaseUrl}/{trimmed}";
-        var request = new HttpRequestMessage(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return request;
+        return $"{DatabaseUrl}/{trimmed}?auth={Uri.EscapeDataString(token)}";
+    }
+
+    private static string MapCreateError(Exception ex)
+    {
+        if (ex is InvalidOperationException && ex.Message.Contains("Not authenticated", StringComparison.Ordinal))
+            return "Not signed in. Sign in again, then retry.";
+        if (ex is HttpRequestException or TaskCanceledException)
+            return "No network connection. Check Wi‑Fi/mobile data and try again.";
+        if (ex is RtdbHttpException http)
+        {
+            if (http.IsPermissionDenied)
+                return "Permission denied by Realtime Database rules. Confirm you are signed in and RTDB rules allow family create.";
+            if (http.IsUnauthorized)
+                return "Session expired or invalid. Sign out, sign in again, then retry.";
+            return $"Could not create family (HTTP {(int)http.StatusCode}). Try again.";
+        }
+        return "Could not create family. Check your connection and that Realtime Database is enabled.";
+    }
+
+    private static string MapJoinError(Exception ex)
+    {
+        if (ex is InvalidOperationException && ex.Message.Contains("Not authenticated", StringComparison.Ordinal))
+            return "Not signed in. Sign in again, then retry.";
+        if (ex is HttpRequestException or TaskCanceledException)
+            return "No network connection. Check Wi‑Fi/mobile data and try again.";
+        if (ex is RtdbHttpException http)
+        {
+            if (http.IsPermissionDenied)
+                return "Permission denied. The code may be wrong, or Realtime Database rules blocked the join.";
+            if (http.IsUnauthorized)
+                return "Session expired or invalid. Sign out, sign in again, then retry.";
+            return $"Could not join family (HTTP {(int)http.StatusCode}). Try again.";
+        }
+        return "Could not join family. Check your connection.";
+    }
+
+    private sealed class RtdbHttpException : Exception
+    {
+        public System.Net.HttpStatusCode StatusCode { get; }
+        public string ResponseBody { get; }
+
+        public RtdbHttpException(System.Net.HttpStatusCode statusCode, string message, string responseBody)
+            : base(message)
+        {
+            StatusCode = statusCode;
+            ResponseBody = responseBody ?? string.Empty;
+        }
+
+        public bool IsPermissionDenied =>
+            ResponseBody.Contains("Permission denied", StringComparison.OrdinalIgnoreCase) ||
+            StatusCode == System.Net.HttpStatusCode.Forbidden;
+
+        public bool IsUnauthorized =>
+            !IsPermissionDenied &&
+            (StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+             ResponseBody.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string GenerateFamilyCode()
