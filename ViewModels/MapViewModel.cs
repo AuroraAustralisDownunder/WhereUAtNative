@@ -17,7 +17,6 @@ public class MapViewModel : INotifyPropertyChanged
     private string _statusMessage = "Tap the pin to share your location, or open Settings to join a family.";
     private bool _hasSelfPin;
     private bool _selfPinOnMap;
-    private bool _awaitingMapCenter;
     private double _pinLatitude;
     private double _pinLongitude;
     private int _familyMarkerCount;
@@ -52,21 +51,6 @@ public class MapViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>
-    /// True after GPS has a self fix until MapPage confirms Leaflet lock-follow at neighbourhood zoom (~16).
-    /// Keeps status on "centering…" and tells MapPage to keep forcing flyTo.
-    /// </summary>
-    public bool AwaitingMapCenter
-    {
-        get => _awaitingMapCenter;
-        private set
-        {
-            if (_awaitingMapCenter == value)
-                return;
-            _awaitingMapCenter = value;
-            OnPropertyChanged();
-        }
-    }
 
     public int FamilyMarkerCount
     {
@@ -213,8 +197,9 @@ public class MapViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Called by MapPage after setPin + flyTo/lock@zoom16 is confirmed (isSelfCentered).
+    /// Called by MapPage after setPin is confirmed on the Leaflet map (hasUser('self')).
     /// Clears waiting hints and switches status to the centered/coords chip.
+    /// map.html still flyTo@16 on first/force setPin — no C# zoom-retry gate.
     /// </summary>
     public void NotifySelfPinOnMap()
     {
@@ -222,7 +207,6 @@ public class MapViewModel : INotifyPropertyChanged
             return;
 
         _selfPinOnMap = true;
-        AwaitingMapCenter = false;
         ToggleHint = null;
         UpdateStatusMessage(fixAcquired: true);
     }
@@ -347,10 +331,9 @@ public class MapViewModel : INotifyPropertyChanged
         var wasPinned = _hasSelfPin;
         _hasSelfPin = true;
 
-        // First fix (and until Leaflet confirms lock@zoom16): keep "centering…" + AwaitingMapCenter.
+        // Show "centering" until MapPage confirms the marker is on the Leaflet map (hasUser).
         if (!wasPinned || !_selfPinOnMap)
         {
-            AwaitingMapCenter = true;
             StatusMessage = "Fix acquired — centering…";
             ToggleHint = null;
         }
@@ -364,17 +347,15 @@ public class MapViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ShowEmptyOverlay));
         }
 
-        // Always notify so MapPage re-injects setPin:
-        // - first fix / not yet on map (force flyTo)
-        // - continuous GPS while lock-following (keep map centered)
-        if (!wasPinned || latChanged || lonChanged || !_selfPinOnMap || AwaitingMapCenter)
+        // Notify MapPage to inject setPin (first fix / moved / not yet on map).
+        // Do NOT keep re-firing while waiting for zoom — that starved GPS in v0.2.10.
+        if (!wasPinned || latChanged || lonChanged || !_selfPinOnMap)
             SelfPinChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ClearSelfPin()
     {
         _selfPinOnMap = false;
-        AwaitingMapCenter = false;
         if (!_hasSelfPin)
         {
             SelfPinChanged?.Invoke(this, EventArgs.Empty);
@@ -438,7 +419,7 @@ public class MapViewModel : INotifyPropertyChanged
         var parts = new List<string>();
         if (HasSelfPin)
         {
-            if (_selfPinOnMap && !AwaitingMapCenter)
+            if (_selfPinOnMap)
             {
                 var lat = Math.Round(PinLatitude, 4);
                 var lon = Math.Round(PinLongitude, 4);

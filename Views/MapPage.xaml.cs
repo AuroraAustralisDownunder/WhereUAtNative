@@ -13,7 +13,6 @@ public partial class MapPage : ContentPage
     private int _syncGate;
     private bool _centeredOnSelf;
     private int _selfInjectGeneration;
-    private CancellationTokenSource? _reinjectCts;
 
     // Queue self pin when WebView/bridge is not ready yet (apply on Navigated / bridge probe).
     private double? _pendingLat;
@@ -39,9 +38,8 @@ public partial class MapPage : ContentPage
             _centeredOnSelf = false;
             await EnsureMapLoadedAsync();
             await _viewModel.OnAppearingAsync();
-            // Do not require Navigated alone — probe Leaflet bridge and reinject until confirmed.
+            // Probe Leaflet bridge (do not require Navigated alone) then sync once.
             await EnsureBridgeAndSyncAsync(forceSelfCenter: true);
-            StartReinjectLoop();
         }
         catch
         {
@@ -51,7 +49,6 @@ public partial class MapPage : ContentPage
 
     protected override void OnDisappearing()
     {
-        StopReinjectLoop();
         _viewModel.OnDisappearing();
         base.OnDisappearing();
     }
@@ -63,13 +60,12 @@ public partial class MapPage : ContentPage
 
     private void OnSelfPinChanged(object? sender, EventArgs e)
     {
-        // Only SyncSelfPinAsync may NotifySelfPinOnMap — and only after isSelfCentered confirms.
+        // Force-center on dedicated self-pin events until we've locked once; confirm via hasUser.
         MainThread.BeginInvokeOnMainThread(async () =>
         {
-            // First fix + continuous lock-follow updates always try to center until locked@16.
-            await EnsureBridgeAndSyncAsync(forceSelfCenter: !_centeredOnSelf || _viewModel.AwaitingMapCenter);
-            if (_viewModel.HasSelfPin && !_centeredOnSelf)
-                StartReinjectLoop();
+            await EnsureBridgeAndSyncAsync(forceSelfCenter: !_centeredOnSelf);
+            if (_viewModel.HasSelfPin && _centeredOnSelf)
+                _viewModel.NotifySelfPinOnMap();
         });
     }
 
@@ -77,18 +73,14 @@ public partial class MapPage : ContentPage
     {
         // Do NOT sync on StatusMessage / ShowEmptyOverlay — that legacy trigger called clearPin
         // on every "waiting for GPS…" rewrite and raced with setPin (v0.1.1 WebView empty-state).
+        // Do NOT sync on AwaitingMapCenter — v0.2.10's zoom-confirm loop starved GPS / UI thread.
         if (e.PropertyName is nameof(MapViewModel.HasSelfPin)
             or nameof(MapViewModel.PinLatitude)
             or nameof(MapViewModel.PinLongitude)
-            or nameof(MapViewModel.HasMapContent)
-            or nameof(MapViewModel.AwaitingMapCenter))
+            or nameof(MapViewModel.HasMapContent))
         {
             MainThread.BeginInvokeOnMainThread(async () =>
-            {
-                await SyncMapFromViewModelAsync(forceSelfCenter: !_centeredOnSelf || _viewModel.AwaitingMapCenter);
-                if (_viewModel.HasSelfPin && !_centeredOnSelf)
-                    StartReinjectLoop();
-            });
+                await SyncMapFromViewModelAsync(forceSelfCenter: !_centeredOnSelf));
         }
     }
 
@@ -170,14 +162,12 @@ public partial class MapPage : ContentPage
             }
             catch
             {
-                // WebView not ready — queue current self pin if any.
                 QueuePendingFromViewModel(forceSelfCenter);
             }
 
             await Task.Delay(100);
         }
 
-        // Last attempt even if bridge check failed — Sync catches errors.
         await SyncMapFromViewModelAsync(forceSelfCenter: forceSelfCenter);
     }
 
@@ -215,12 +205,11 @@ public partial class MapPage : ContentPage
                 return;
             }
 
-            await SyncSelfPinAsync(forceCenter: forceSelfCenter || !_centeredOnSelf);
+            await SyncSelfPinAsync(forceCenter: forceSelfCenter || !_centeredOnSelf || _pendingForceCenter);
             await SyncFamilyMarkersAsync();
         }
         catch
         {
-            // WebView may not be ready yet — queue for later.
             QueuePendingFromViewModel(forceSelfCenter);
         }
         finally
@@ -239,25 +228,22 @@ public partial class MapPage : ContentPage
                 var lon = _viewModel.PinLongitude;
                 var latS = lat.ToString(CultureInfo.InvariantCulture);
                 var lonS = lon.ToString(CultureInfo.InvariantCulture);
-                // Always force center until we've successfully lock-followed at zoom 16.
-                var shouldCenter = forceCenter || !_centeredOnSelf || _viewModel.AwaitingMapCenter;
+                // Force center only until we've successfully put the self marker on the map once.
+                // map.html setPin(force) does flyTo@16 + short layout retries — no C# reinject loop.
+                var shouldCenter = forceCenter || !_centeredOnSelf || _pendingForceCenter;
                 var centerFlag = shouldCenter ? "true" : "false";
                 var gen = Interlocked.Increment(ref _selfInjectGeneration);
 
-                // IIFE + explicit window.setPin so Android WebView always executes and returns a status.
                 var inject = await EvalAsync(
                     "(function(){ try {" +
                     " if (typeof window.setPin !== 'function') return 'NOFN';" +
                     $" var r = window.setPin({latS}, {lonS}, {centerFlag});" +
-                    " if (typeof window.lockUser === 'function' && " + (shouldCenter ? "true" : "false") + ") window.lockUser('self');" +
                     " var ok = (typeof window.hasUser === 'function' && window.hasUser('self'));" +
-                    " var cen = (typeof window.isSelfCentered === 'function' && window.isSelfCentered() === '1');" +
-                    " return ok ? (cen ? 'OKC:' + String(r) : 'OKZ:' + String(r)) : ('MISS:' + String(r));" +
+                    " return ok ? ('OK:' + String(r)) : ('MISS:' + String(r));" +
                     " } catch(e) { return 'ERR:' + String(e); } })()");
 
                 if (inject is null || inject.Contains("NOFN", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Bridge not ready — queue and retry via reinject loop.
                     _pendingLat = lat;
                     _pendingLon = lon;
                     _pendingForceCenter = true;
@@ -265,62 +251,32 @@ public partial class MapPage : ContentPage
                 }
 
                 var pinOk = inject.Contains("OK", StringComparison.OrdinalIgnoreCase);
-                var centeredOk = inject.Contains("OKC", StringComparison.OrdinalIgnoreCase);
 
-                // Give Leaflet layout/flyTo a beat, then re-check isSelfCentered.
-                if (pinOk && shouldCenter && !centeredOk)
+                // One short retry if bridge raced — do NOT wait on zoom/isSelfCentered (v0.2.10 hang).
+                if (!pinOk)
                 {
-                    await Task.Delay(200);
+                    await Task.Delay(150);
                     if (gen != _selfInjectGeneration)
                         return;
-                    centeredOk = await ProbeSelfCenteredAsync();
-                    if (!centeredOk)
-                    {
-                        // Hard re-inject with forceCenter + lockUser.
-                        inject = await EvalAsync(
-                            "(function(){ try {" +
-                            " if (typeof window.setPin !== 'function') return 'NOFN';" +
-                            $" window.setPin({latS}, {lonS}, true);" +
-                            " if (typeof window.lockUser === 'function') window.lockUser('self');" +
-                            " var ok = (typeof window.hasUser === 'function' && window.hasUser('self'));" +
-                            " var cen = (typeof window.isSelfCentered === 'function' && window.isSelfCentered() === '1');" +
-                            " return ok ? (cen ? 'OKC' : 'OKZ') : 'MISS';" +
-                            " } catch(e) { return 'ERR'; } })()");
-                        pinOk = inject is not null && inject.Contains("OK", StringComparison.OrdinalIgnoreCase);
-                        centeredOk = inject is not null && inject.Contains("OKC", StringComparison.OrdinalIgnoreCase);
-                    }
-                }
-
-                // One more delayed probe — flyTo retries in map.html land at 120/450/900ms.
-                if (pinOk && shouldCenter && !centeredOk)
-                {
-                    await Task.Delay(500);
-                    if (gen != _selfInjectGeneration)
-                        return;
-                    centeredOk = await ProbeSelfCenteredAsync();
+                    inject = await EvalAsync(
+                        "(function(){ try {" +
+                        " if (typeof window.setPin !== 'function') return 'NOFN';" +
+                        $" window.setPin({latS}, {lonS}, true);" +
+                        " var ok = (typeof window.hasUser === 'function' && window.hasUser('self'));" +
+                        " return ok ? 'OK' : 'MISS';" +
+                        " } catch(e) { return 'ERR'; } })()");
+                    pinOk = inject is not null && inject.Contains("OK", StringComparison.OrdinalIgnoreCase);
                 }
 
                 if (pinOk)
                 {
                     _pendingLat = null;
                     _pendingLon = null;
+                    _pendingForceCenter = false;
                     _bridgeReady = true;
-
-                    if (centeredOk || !shouldCenter)
-                    {
-                        if (shouldCenter || centeredOk)
-                            _centeredOnSelf = true;
-                        _pendingForceCenter = false;
-                        _viewModel.NotifySelfPinOnMap();
-                        if (_centeredOnSelf)
-                            StopReinjectLoop();
-                    }
-                    else
-                    {
-                        // Pin exists but still world/country view — keep reinjecting.
-                        _centeredOnSelf = false;
-                        _pendingForceCenter = true;
-                    }
+                    if (shouldCenter)
+                        _centeredOnSelf = true;
+                    _viewModel.NotifySelfPinOnMap();
                 }
                 else
                 {
@@ -346,20 +302,6 @@ public partial class MapPage : ContentPage
         catch
         {
             QueuePendingFromViewModel(forceCenter);
-        }
-    }
-
-    private async Task<bool> ProbeSelfCenteredAsync()
-    {
-        try
-        {
-            var r = await EvalAsync(
-                "(function(){ try { return (typeof window.isSelfCentered === 'function' && window.isSelfCentered() === '1') ? '1' : '0'; } catch(e) { return '0'; } })()");
-            return IsJsTruthy(r);
-        }
-        catch
-        {
-            return false;
         }
     }
 
@@ -392,95 +334,6 @@ public partial class MapPage : ContentPage
         }
     }
 
-    /// <summary>
-    /// Keep retrying setPin+flyTo until isSelfCentered (lock + zoom≥14 near self), or sharing stops.
-    /// Covers WebView-not-ready and zero-size first-paint races that left the map on a default country.
-    /// </summary>
-    private void StartReinjectLoop()
-    {
-        if (!_viewModel.HasSelfPin || _centeredOnSelf)
-            return;
-
-        StopReinjectLoop();
-        var cts = new CancellationTokenSource();
-        _reinjectCts = cts;
-        _ = RunReinjectLoopAsync(cts.Token);
-    }
-
-    private void StopReinjectLoop()
-    {
-        try
-        {
-            _reinjectCts?.Cancel();
-            _reinjectCts?.Dispose();
-        }
-        catch
-        {
-            // ignore
-        }
-        finally
-        {
-            _reinjectCts = null;
-        }
-    }
-
-    private async Task RunReinjectLoopAsync(CancellationToken token)
-    {
-        try
-        {
-            for (var attempt = 0; attempt < 40 && !token.IsCancellationRequested; attempt++)
-            {
-                if (!_viewModel.HasSelfPin)
-                    return;
-                if (_centeredOnSelf)
-                    return;
-
-                // Sharing turned off while we were retrying — drop queue.
-                if (!_viewModel.HasSelfPin)
-                {
-                    _pendingLat = _pendingLon = null;
-                    _pendingForceCenter = false;
-                    return;
-                }
-
-                await EnsureBridgeAndSyncAsync(forceSelfCenter: true);
-
-                if (_centeredOnSelf)
-                    return;
-
-                // Extra hard setView via JS if pin exists but zoom still low.
-                if (_viewModel.HasSelfPin)
-                {
-                    var latS = _viewModel.PinLatitude.ToString(CultureInfo.InvariantCulture);
-                    var lonS = _viewModel.PinLongitude.ToString(CultureInfo.InvariantCulture);
-                    await EvalAsync(
-                        "(function(){ try {" +
-                        $" if (typeof window.setPin === 'function') window.setPin({latS}, {lonS}, true);" +
-                        " if (typeof window.lockUser === 'function') window.lockUser('self');" +
-                        " } catch(e) {} })()");
-                    await Task.Delay(300, token);
-                    if (await ProbeSelfCenteredAsync())
-                    {
-                        _centeredOnSelf = true;
-                        _pendingForceCenter = false;
-                        _viewModel.NotifySelfPinOnMap();
-                        return;
-                    }
-                }
-
-                await Task.Delay(400, token);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // expected
-        }
-        catch
-        {
-            // ignore
-        }
-    }
-
     private async Task<string?> EvalAsync(string script)
     {
         try
@@ -497,7 +350,6 @@ public partial class MapPage : ContentPage
     {
         if (string.IsNullOrWhiteSpace(value))
             return false;
-        // MAUI may wrap results in quotes: "1" / \"1\" / 1 / true
         return value.Contains('1', StringComparison.Ordinal) ||
                value.Contains("true", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("OK", StringComparison.OrdinalIgnoreCase);
