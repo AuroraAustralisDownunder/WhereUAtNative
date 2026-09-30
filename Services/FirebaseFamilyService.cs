@@ -72,33 +72,34 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
 
         try
         {
+            // Under member-only family read rules we cannot probe families/{code} before create.
+            // Create must PUT the family root WITH members/{uid} in the same write so
+            // !data.exists() && newData.child('members').child(auth.uid).exists() passes.
+            // Collisions (code taken) fail the write; retry with a new code.
             for (var attempt = 0; attempt < 8; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var code = GenerateFamilyCode();
-                var existing = await GetAsync($"families/{code}.json", cancellationToken);
-                if (!IsJsonNull(existing))
-                    continue;
-
                 var displayName = _auth.DisplayName;
                 var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                var familyPayload = JsonSerializer.Serialize(new
+                var familyPayload = JsonSerializer.Serialize(new Dictionary<string, object?>
                 {
-                    createdBy = uid,
-                    createdAt = now,
-                    code
+                    ["createdBy"] = uid,
+                    ["createdAt"] = now,
+                    ["code"] = code,
+                    ["members"] = new Dictionary<string, object?>
+                    {
+                        [uid] = new Dictionary<string, object?>
+                        {
+                            ["displayName"] = displayName,
+                            ["joinedAt"] = now
+                        }
+                    }
                 });
-                var putFamily = await PutAsync($"families/{code}.json", familyPayload, cancellationToken);
-                if (!putFamily)
-                    return (null, "Could not create family. Check Firebase Realtime Database is enabled.");
 
-                var memberPayload = JsonSerializer.Serialize(new
-                {
-                    displayName,
-                    joinedAt = now
-                });
-                await PutAsync($"families/{code}/members/{uid}.json", memberPayload, cancellationToken);
+                if (!await PutAsync($"families/{code}.json", familyPayload, cancellationToken))
+                    continue;
 
                 var userPayload = JsonSerializer.Serialize(new
                 {
@@ -138,10 +139,9 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
 
         try
         {
-            var existing = await GetAsync($"families/{code}.json", cancellationToken);
-            if (IsJsonNull(existing))
-                return "No family found for that code.";
-
+            // Non-members cannot READ families/{code} under tightened rules.
+            // Self-write on members/{uid} is allowed; join by PUT only that path,
+            // then verify the family looks real (createdBy) now that we can read.
             var displayName = _auth.DisplayName;
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -151,7 +151,24 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
                 joinedAt = now
             });
             if (!await PutAsync($"families/{code}/members/{uid}.json", memberPayload, cancellationToken))
-                return "Could not join family. Check Realtime Database rules.";
+                return "Could not join family. Check the code and Realtime Database rules.";
+
+            string familyJson;
+            try
+            {
+                familyJson = await GetAsync($"families/{code}.json", cancellationToken);
+            }
+            catch
+            {
+                await TryDeleteMemberAsync(code, uid, cancellationToken);
+                return "Could not verify family after join.";
+            }
+
+            if (IsJsonNull(familyJson) || !FamilyLooksValid(familyJson))
+            {
+                await TryDeleteMemberAsync(code, uid, cancellationToken);
+                return "No family found for that code.";
+            }
 
             var userPayload = JsonSerializer.Serialize(new
             {
@@ -170,6 +187,36 @@ public sealed class FirebaseFamilyService : IFamilyService, IDisposable
         catch
         {
             return "Could not join family. Check your connection.";
+        }
+    }
+
+    private async Task TryDeleteMemberAsync(string familyId, string uid, CancellationToken ct)
+    {
+        try
+        {
+            await DeleteAsync($"families/{familyId}/members/{uid}.json", ct);
+        }
+        catch
+        {
+            // best-effort rollback
+        }
+    }
+
+    /// <summary>True when the family node has a creator (not a ghost from a mistyped join).</summary>
+    private static bool FamilyLooksValid(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+            return doc.RootElement.TryGetProperty("createdBy", out var createdBy) &&
+                   createdBy.ValueKind == JsonValueKind.String &&
+                   !string.IsNullOrWhiteSpace(createdBy.GetString());
+        }
+        catch
+        {
+            return false;
         }
     }
 
