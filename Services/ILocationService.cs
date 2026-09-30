@@ -27,7 +27,7 @@ public interface ILocationService
     /// </summary>
     Task<(bool Success, string? Message)> EnableSharingAsync();
 
-    /// <summary>Disables sharing, clears last known position, and stops updates.</summary>
+    /// <summary>Disables sharing, clears last known position, and stops foreground listening.</summary>
     Task DisableSharingAsync();
 
     /// <summary>
