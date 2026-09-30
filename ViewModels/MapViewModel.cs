@@ -16,6 +16,7 @@ public class MapViewModel : INotifyPropertyChanged
 
     private string _statusMessage = "Tap the pin to share your location, or open Settings to join a family.";
     private bool _hasSelfPin;
+    private bool _selfPinOnMap;
     private double _pinLatitude;
     private double _pinLongitude;
     private int _familyMarkerCount;
@@ -163,8 +164,11 @@ public class MapViewModel : INotifyPropertyChanged
 
             if (_locationService.IsSharingEnabled)
             {
-                StatusMessage = _locationService.LastFailureHint ?? "Sharing on — waiting for GPS…";
-                ToggleHint = HasSelfPin ? null : StatusMessage;
+                if (!HasSelfPin)
+                {
+                    StatusMessage = _locationService.LastFailureHint ?? "Sharing on — waiting for GPS…";
+                    ToggleHint = StatusMessage;
+                }
                 var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
                 ApplySelfLocation(location);
             }
@@ -189,6 +193,20 @@ public class MapViewModel : INotifyPropertyChanged
         _isPageVisible = false;
         _locationService.PositionChanged -= OnPositionChanged;
         StopFamilyPoll();
+    }
+
+    /// <summary>
+    /// Called by MapPage after setPin is confirmed on the Leaflet map.
+    /// Clears waiting hints and switches status to the centered/coords chip.
+    /// </summary>
+    public void NotifySelfPinOnMap()
+    {
+        if (!_hasSelfPin)
+            return;
+
+        _selfPinOnMap = true;
+        ToggleHint = null;
+        UpdateStatusMessage(fixAcquired: true);
     }
 
     private async Task ToggleSharingAsync()
@@ -223,8 +241,9 @@ public class MapViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                // Keep a visible waiting hint until the first fix arrives (listener or poll).
+                // Keep a visible waiting hint until the first fix is on the map.
                 ToggleHint = message ?? _locationService.LastFailureHint ?? "Sharing on — waiting for GPS…";
+                StatusMessage = ToggleHint;
                 var location = _locationService.LastKnownLocation ?? await _locationService.GetCurrentAsync();
                 ApplySelfLocation(location);
                 UpdateStatusMessage();
@@ -303,10 +322,19 @@ public class MapViewModel : INotifyPropertyChanged
         }
 
         // Set fields then raise once so MapPage does not sync mid-update (lat without lon / clearPin race).
+        var latChanged = Math.Abs(_pinLatitude - location.Latitude) > 1e-8;
+        var lonChanged = Math.Abs(_pinLongitude - location.Longitude) > 1e-8;
         _pinLatitude = location.Latitude;
         _pinLongitude = location.Longitude;
         var wasPinned = _hasSelfPin;
         _hasSelfPin = true;
+
+        // Show "centering" until MapPage confirms the marker is on the Leaflet map.
+        if (!wasPinned || !_selfPinOnMap)
+        {
+            StatusMessage = "Fix acquired — centering…";
+            ToggleHint = null;
+        }
 
         OnPropertyChanged(nameof(PinLatitude));
         OnPropertyChanged(nameof(PinLongitude));
@@ -317,12 +345,14 @@ public class MapViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ShowEmptyOverlay));
         }
 
-        ToggleHint = null;
-        SelfPinChanged?.Invoke(this, EventArgs.Empty);
+        // Always notify so MapPage re-injects setPin (even when lat/lon barely moved).
+        if (!wasPinned || latChanged || lonChanged || !_selfPinOnMap)
+            SelfPinChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ClearSelfPin()
     {
+        _selfPinOnMap = false;
         if (!_hasSelfPin)
         {
             SelfPinChanged?.Invoke(this, EventArgs.Empty);
@@ -362,7 +392,7 @@ public class MapViewModel : INotifyPropertyChanged
         }
     }
 
-    private void UpdateStatusMessage()
+    private void UpdateStatusMessage(bool fixAcquired = false)
     {
         if (!HasMapContent)
         {
@@ -386,9 +416,16 @@ public class MapViewModel : INotifyPropertyChanged
         var parts = new List<string>();
         if (HasSelfPin)
         {
-            var lat = Math.Round(PinLatitude, 4);
-            var lon = Math.Round(PinLongitude, 4);
-            parts.Add($"You — {lat:0.0000}, {lon:0.0000}");
+            if (_selfPinOnMap)
+            {
+                var lat = Math.Round(PinLatitude, 4);
+                var lon = Math.Round(PinLongitude, 4);
+                parts.Add($"You — {lat:0.0000}, {lon:0.0000}");
+            }
+            else
+            {
+                parts.Add("Fix acquired — centering…");
+            }
         }
 
         if (FamilyMarkerCount > 0)

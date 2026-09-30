@@ -10,6 +10,8 @@ public partial class MapPage : ContentPage
     private string? _cachedHtml;
     private readonly HashSet<string> _renderedFamilyIds = new(StringComparer.Ordinal);
     private int _syncGate;
+    private bool _centeredOnSelf;
+    private int _selfInjectGeneration;
 
     public MapPage(MapViewModel viewModel)
     {
@@ -27,9 +29,10 @@ public partial class MapPage : ContentPage
         base.OnAppearing();
         try
         {
+            _centeredOnSelf = false;
             await EnsureMapLoadedAsync();
             await _viewModel.OnAppearingAsync();
-            await EnsureBridgeAndSyncAsync();
+            await EnsureBridgeAndSyncAsync(forceSelfCenter: true);
         }
         catch
         {
@@ -50,17 +53,23 @@ public partial class MapPage : ContentPage
 
     private void OnSelfPinChanged(object? sender, EventArgs e)
     {
-        MainThread.BeginInvokeOnMainThread(async () => await SyncSelfPinAsync(forceCenter: true));
+        // Always force-center on dedicated self-pin events (first fix + follow updates).
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            await SyncSelfPinAsync(forceCenter: true);
+            if (_viewModel.HasSelfPin)
+                _viewModel.NotifySelfPinOnMap();
+        });
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        // Do NOT sync on StatusMessage / ShowEmptyOverlay — that legacy trigger called clearPin
+        // on every "waiting for GPS…" rewrite and raced with setPin (v0.1.1 WebView empty-state).
         if (e.PropertyName is nameof(MapViewModel.HasSelfPin)
             or nameof(MapViewModel.PinLatitude)
             or nameof(MapViewModel.PinLongitude)
-            or nameof(MapViewModel.HasMapContent)
-            or nameof(MapViewModel.StatusMessage)
-            or nameof(MapViewModel.ShowEmptyOverlay))
+            or nameof(MapViewModel.HasMapContent))
         {
             MainThread.BeginInvokeOnMainThread(async () => await SyncMapFromViewModelAsync());
         }
@@ -69,8 +78,9 @@ public partial class MapPage : ContentPage
     private async void OnMapWebViewNavigated(object? sender, WebNavigatedEventArgs e)
     {
         _mapReady = e.Result == WebNavigationResult.Success;
+        _centeredOnSelf = false;
         if (_mapReady)
-            await EnsureBridgeAndSyncAsync();
+            await EnsureBridgeAndSyncAsync(forceSelfCenter: true);
     }
 
     /// <summary>
@@ -117,20 +127,20 @@ public partial class MapPage : ContentPage
     /// <summary>
     /// Wait briefly for window.setPin to exist (Leaflet CDN + inline init), then sync markers.
     /// </summary>
-    private async Task EnsureBridgeAndSyncAsync()
+    private async Task EnsureBridgeAndSyncAsync(bool forceSelfCenter = false)
     {
         if (!_mapReady)
             return;
 
-        for (var i = 0; i < 20; i++)
+        for (var i = 0; i < 30; i++)
         {
             try
             {
                 var ready = await MapWebView.EvaluateJavaScriptAsync(
-                    "(function(){ return (typeof window.setPin === 'function' && typeof window.upsertUser === 'function') ? '1' : '0'; })()");
+                    "(function(){ try { return (typeof window.setPin === 'function' && typeof window.upsertUser === 'function' && typeof L !== 'undefined') ? '1' : '0'; } catch(e) { return '0'; } })()");
                 if (ready is not null && ready.Contains('1'))
                 {
-                    await SyncMapFromViewModelAsync();
+                    await SyncMapFromViewModelAsync(forceSelfCenter: forceSelfCenter);
                     return;
                 }
             }
@@ -143,28 +153,36 @@ public partial class MapPage : ContentPage
         }
 
         // Last attempt even if bridge check failed — Sync catches errors.
-        await SyncMapFromViewModelAsync();
+        await SyncMapFromViewModelAsync(forceSelfCenter: forceSelfCenter);
     }
 
-    private async Task SyncMapFromViewModelAsync()
+    private async Task SyncMapFromViewModelAsync(bool forceSelfCenter = false)
     {
         if (!_mapReady)
             return;
 
         if (Interlocked.CompareExchange(ref _syncGate, 1, 0) != 0)
+        {
+            // A sync is in flight — still push self pin without taking the gate so we never
+            // drop a fix behind a clearPin/status race.
+            if (_viewModel.HasSelfPin)
+                await SyncSelfPinAsync(forceCenter: forceSelfCenter || !_centeredOnSelf);
             return;
+        }
 
         try
         {
+            // Re-read after acquiring the gate — StatusMessage used to trigger clearPin with a
+            // stale !HasMapContent snapshot and wipe a pin set concurrently via SelfPinChanged.
             if (!_viewModel.HasMapContent)
             {
-                var msg = EscapeJs(_viewModel.StatusMessage);
-                await MapWebView.EvaluateJavaScriptAsync($"clearPin('{msg}')");
+                await EvalAsync("clearPin('')");
                 _renderedFamilyIds.Clear();
+                _centeredOnSelf = false;
                 return;
             }
 
-            await SyncSelfPinAsync(forceCenter: false);
+            await SyncSelfPinAsync(forceCenter: forceSelfCenter || !_centeredOnSelf);
             await SyncFamilyMarkersAsync();
         }
         catch
@@ -188,12 +206,43 @@ public partial class MapPage : ContentPage
             {
                 var lat = _viewModel.PinLatitude.ToString(CultureInfo.InvariantCulture);
                 var lon = _viewModel.PinLongitude.ToString(CultureInfo.InvariantCulture);
-                var centerFlag = forceCenter ? "true" : "false";
-                await MapWebView.EvaluateJavaScriptAsync($"setPin({lat}, {lon}, {centerFlag})");
+                // Always force center until we've successfully locked onto self once this session,
+                // restoring v0.1.1 lock-follow UX on first fix.
+                var shouldCenter = forceCenter || !_centeredOnSelf;
+                var centerFlag = shouldCenter ? "true" : "false";
+                var gen = Interlocked.Increment(ref _selfInjectGeneration);
+
+                await EvalAsync($"setPin({lat}, {lon}, {centerFlag})");
+
+                // Verify the JS bridge actually created the self marker; retry once if not.
+                var hasSelf = await EvalAsync(
+                    "(function(){ try { return (typeof window.hasUser === 'function' && window.hasUser('self')) ? '1' : '0'; } catch(e) { return '0'; } })()");
+                if (hasSelf is null || !hasSelf.Contains('1'))
+                {
+                    await Task.Delay(150);
+                    if (gen == _selfInjectGeneration)
+                    {
+                        await EvalAsync($"setPin({lat}, {lon}, true)");
+                        hasSelf = await EvalAsync(
+                            "(function(){ try { return (typeof window.hasUser === 'function' && window.hasUser('self')) ? '1' : '0'; } catch(e) { return '0'; } })()");
+                    }
+                }
+
+                if (hasSelf is not null && hasSelf.Contains('1'))
+                {
+                    if (shouldCenter)
+                        _centeredOnSelf = true;
+                    _viewModel.NotifySelfPinOnMap();
+                }
             }
             else if (_viewModel.HasMapContent)
             {
-                await MapWebView.EvaluateJavaScriptAsync("removeUser('self')");
+                await EvalAsync("removeUser('self')");
+                _centeredOnSelf = false;
+            }
+            else
+            {
+                _centeredOnSelf = false;
             }
         }
         catch
@@ -214,7 +263,7 @@ public partial class MapPage : ContentPage
 
             foreach (var stale in _renderedFamilyIds.Where(id => !nextIds.Contains(id)).ToList())
             {
-                await MapWebView.EvaluateJavaScriptAsync($"removeUser('{EscapeJs(stale)}')");
+                await EvalAsync($"removeUser('{EscapeJs(stale)}')");
                 _renderedFamilyIds.Remove(stale);
             }
 
@@ -224,13 +273,25 @@ public partial class MapPage : ContentPage
                 var lonS = lon.ToString(CultureInfo.InvariantCulture);
                 var labelS = EscapeJs(label);
                 var idS = EscapeJs(id);
-                await MapWebView.EvaluateJavaScriptAsync($"upsertUser('{idS}', {latS}, {lonS}, '{labelS}')");
+                await EvalAsync($"upsertUser('{idS}', {latS}, {lonS}, '{labelS}')");
                 _renderedFamilyIds.Add(id);
             }
         }
         catch
         {
             // ignore WebView race
+        }
+    }
+
+    private async Task<string?> EvalAsync(string script)
+    {
+        try
+        {
+            return await MapWebView.EvaluateJavaScriptAsync(script);
+        }
+        catch
+        {
+            return null;
         }
     }
 
