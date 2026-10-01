@@ -28,12 +28,39 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // Remove Material underline on Android Entry (login/password look boxed, not underscored).
-        Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoUnderline", (handler, view) =>
+        // Android Entry: no Material underline; white caret + soft white selection highlight
+        // (dark login fields otherwise show a near-invisible dark cursor).
+        Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoUnderlineWhiteCursor", (handler, view) =>
         {
 #if ANDROID
-            handler.PlatformView.BackgroundTintList =
+            var edit = handler.PlatformView;
+            edit.BackgroundTintList =
                 Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+            edit.SetHighlightColor(Android.Graphics.Color.Argb(0x66, 0xFF, 0xFF, 0xFF));
+            try
+            {
+                // Prefer tinting the system caret; fall back to a white rect so dark fields stay readable.
+                var cursor = edit.TextCursorDrawable;
+                if (cursor != null)
+                {
+                    cursor.SetTint(Android.Graphics.Color.White);
+                    edit.TextCursorDrawable = cursor;
+                }
+                else
+                {
+                    var shape = new Android.Graphics.Drawables.ShapeDrawable(
+                        new Android.Graphics.Drawables.Shapes.RectShape());
+                    if (shape.Paint != null)
+                        shape.Paint.Color = Android.Graphics.Color.White;
+                    shape.SetIntrinsicWidth(3);
+                    shape.SetIntrinsicHeight(48);
+                    edit.TextCursorDrawable = shape;
+                }
+            }
+            catch
+            {
+                // Older/odd OEMs — white ShapeDrawable fallback covers most OEMs.
+            }
 #endif
         });
 

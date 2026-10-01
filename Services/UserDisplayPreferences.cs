@@ -22,6 +22,16 @@ public static class UserDisplayPreferences
         ("Soft orange", "#FFB74D"),
         ("Muted green", "#81C784"),
         ("Soft indigo", "#7986CB"),
+        ("Soft coral", "#E57373"),
+        ("Soft cyan", "#4DD0E1"),
+        ("Soft amber", "#FFD54F"),
+        ("Soft lilac", "#CE93D8"),
+        ("Soft lime", "#DCE775"),
+        ("Soft taupe", "#A1887F"),
+        ("Soft slate", "#90A4AE"),
+        ("Soft peach", "#FF8A65"),
+        ("Soft mint", "#AED581"),
+        ("Soft sky", "#4FC3F7"),
     };
 
     public static string GetAlias()

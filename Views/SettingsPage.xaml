@@ -108,6 +108,46 @@
                                 Text="" BackgroundColor="#7986CB" TextColor="Transparent"
                                 Command="{Binding SelectPinColorCommand}" CommandParameter="#7986CB"
                                 SemanticProperties.Description="Soft indigo" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#E57373" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#E57373"
+                                SemanticProperties.Description="Soft coral" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#4DD0E1" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#4DD0E1"
+                                SemanticProperties.Description="Soft cyan" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#FFD54F" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#FFD54F"
+                                SemanticProperties.Description="Soft amber" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#CE93D8" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#CE93D8"
+                                SemanticProperties.Description="Soft lilac" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#DCE775" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#DCE775"
+                                SemanticProperties.Description="Soft lime" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#A1887F" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#A1887F"
+                                SemanticProperties.Description="Soft taupe" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#90A4AE" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#90A4AE"
+                                SemanticProperties.Description="Soft slate" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#FF8A65" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#FF8A65"
+                                SemanticProperties.Description="Soft peach" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#AED581" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#AED581"
+                                SemanticProperties.Description="Soft mint" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#4FC3F7" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#4FC3F7"
+                                SemanticProperties.Description="Soft sky" />
                     </HorizontalStackLayout>
                     </ScrollView>
 
