@@ -14,7 +14,7 @@ public class MapViewModel : INotifyPropertyChanged
     private readonly IFamilyService _familyService;
     private readonly IAuthService _authService;
 
-    private string _statusMessage = "Tap the pin to share your location, or open Settings to join a family.";
+    private string _statusMessage = "Tap the pin to share your location, or open Settings for family & account.";
     private bool _hasSelfPin;
     private bool _selfPinOnMap;
     private double _pinLatitude;
@@ -26,6 +26,7 @@ public class MapViewModel : INotifyPropertyChanged
     private string? _toggleHint;
     private CancellationTokenSource? _pollCts;
     private bool _isPageVisible;
+    private bool _isFollowLocked;
 
     /// <summary>Snapshot of family markers for the WebView (uid → lat/lon/label). Self uses id "self".</summary>
     public IReadOnlyDictionary<string, (double Lat, double Lon, string Label)> FamilyMarkers { get; private set; }
@@ -105,6 +106,25 @@ public class MapViewModel : INotifyPropertyChanged
 
     public string SharingFabLabel => IsSharingEnabled ? "📍" : "📍";
 
+    /// <summary>True while Leaflet is lock-following a marker (padlock FAB visible).</summary>
+    public bool IsFollowLocked
+    {
+        get => _isFollowLocked;
+        private set
+        {
+            if (_isFollowLocked == value)
+                return;
+            _isFollowLocked = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsUnlockFabVisible));
+            OnPropertyChanged(nameof(UnlockFabColor));
+        }
+    }
+
+    public bool IsUnlockFabVisible => IsFollowLocked;
+
+    public Color UnlockFabColor => Color.FromArgb("#FFD54F");
+
     public string? ToggleHint
     {
         get => _toggleHint;
@@ -125,8 +145,8 @@ public class MapViewModel : INotifyPropertyChanged
         {
             _isBusy = value;
             OnPropertyChanged();
-            ((Command)SignOutCommand).ChangeCanExecute();
             ((Command)ToggleSharingCommand).ChangeCanExecute();
+            ((Command)UnlockFollowCommand).ChangeCanExecute();
         }
     }
 
@@ -137,8 +157,11 @@ public class MapViewModel : INotifyPropertyChanged
     public event EventHandler? SelfPinChanged;
 
     public ICommand ToggleSharingCommand { get; }
-    public ICommand SignOutCommand { get; }
+    public ICommand UnlockFollowCommand { get; }
     public ICommand OpenSettingsCommand { get; }
+
+    /// <summary>Raised when the padlock FAB asks Leaflet to unlock follow.</summary>
+    public event EventHandler? UnlockFollowRequested;
 
     public MapViewModel(ILocationService locationService, IFamilyService familyService, IAuthService authService)
     {
@@ -146,9 +169,21 @@ public class MapViewModel : INotifyPropertyChanged
         _familyService = familyService;
         _authService = authService;
         ToggleSharingCommand = new Command(async () => await ToggleSharingAsync(), () => !IsBusy && !_isToggling);
-        SignOutCommand = new Command(async () => await SignOutAsync(), () => !IsBusy);
+        UnlockFollowCommand = new Command(RequestUnlockFollow, () => !IsBusy && IsFollowLocked);
         OpenSettingsCommand = new Command(async () => await OpenSettingsAsync());
         IsSharingEnabled = _locationService.IsSharingEnabled;
+    }
+
+    private void RequestUnlockFollow()
+    {
+        UnlockFollowRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Called by MapPage after probing Leaflet lock state.</summary>
+    public void SetFollowLocked(bool locked)
+    {
+        IsFollowLocked = locked;
+        ((Command)UnlockFollowCommand).ChangeCanExecute();
     }
 
     public async Task OnAppearingAsync()
@@ -262,31 +297,6 @@ public class MapViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task SignOutAsync()
-    {
-        if (IsBusy)
-            return;
-
-        try
-        {
-            IsBusy = true;
-            StopFamilyPoll();
-            if (_locationService.IsSharingEnabled)
-                await _locationService.DisableSharingAsync();
-            await _familyService.ClearPublishedLocationAsync();
-            IsSharingEnabled = false;
-            ClearSelfPin();
-            ToggleHint = null;
-
-            await _authService.SignOutAsync();
-            await Shell.Current.GoToAsync("//LoginPage");
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
     private async Task OpenSettingsAsync()
     {
         try
@@ -360,6 +370,7 @@ public class MapViewModel : INotifyPropertyChanged
     private void ClearSelfPin()
     {
         _selfPinOnMap = false;
+        SetFollowLocked(false);
         if (!_hasSelfPin)
         {
             SelfPinChanged?.Invoke(this, EventArgs.Empty);
@@ -424,23 +435,15 @@ public class MapViewModel : INotifyPropertyChanged
         if (HasSelfPin)
         {
             if (_selfPinOnMap)
-            {
-                var lat = Math.Round(PinLatitude, 4);
-                var lon = Math.Round(PinLongitude, 4);
-                parts.Add($"You — {lat:0.0000}, {lon:0.0000}");
-            }
+                parts.Add("You are on the map");
             else
-            {
                 parts.Add("Fix acquired — centering…");
-            }
         }
 
         if (FamilyMarkerCount > 0)
             parts.Add($"{FamilyMarkerCount} family sharing");
 
-        if (!string.IsNullOrEmpty(_familyService.CurrentFamilyId))
-            parts.Add($"code {_familyService.CurrentFamilyId}");
-
+        // Coords + family code live in Settings — keep the map chip terse.
         StatusMessage = string.Join(" · ", parts);
     }
 

@@ -7,8 +7,8 @@ using WhereUAtNative.Services;
 namespace WhereUAtNative.ViewModels;
 
 /// <summary>
-/// Family, privacy, and account settings — everything that used to clutter Home.
-/// Location sharing primary control lives on the Map FAB.
+/// Family, privacy, account, coordinates, and sign-out — map stays clean.
+/// Location sharing primary control lives on the Map pin FAB.
 /// </summary>
 public class SettingsViewModel : INotifyPropertyChanged
 {
@@ -48,6 +48,7 @@ public class SettingsViewModel : INotifyPropertyChanged
             ((Command)ShareCrashLogCommand).ChangeCanExecute();
             ((Command)CopyCrashLogCommand).ChangeCanExecute();
             ((Command)ClearCrashLogCommand).ChangeCanExecute();
+            ((Command)SignOutCommand).ChangeCanExecute();
         }
     }
 
@@ -129,6 +130,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ICommand ShareCrashLogCommand { get; }
     public ICommand CopyCrashLogCommand { get; }
     public ICommand ClearCrashLogCommand { get; }
+    public ICommand SignOutCommand { get; }
 
     public SettingsViewModel(IAuthService authService, ILocationService locationService, IFamilyService familyService, ICrashLogService crashLog)
     {
@@ -143,6 +145,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         ShareCrashLogCommand = new Command(async () => await ShareCrashLogAsync(), () => !IsBusy);
         CopyCrashLogCommand = new Command(async () => await CopyCrashLogAsync(), () => !IsBusy);
         ClearCrashLogCommand = new Command(async () => await ClearCrashLogAsync(), () => !IsBusy);
+        SignOutCommand = new Command(async () => await SignOutAsync(), () => !IsBusy);
         ApplyFamilyStateFromService();
         UpdateLocationStatus();
     }
@@ -165,20 +168,20 @@ public class SettingsViewModel : INotifyPropertyChanged
     {
         if (!_locationService.IsSharingEnabled)
         {
-            LocationStatusText = "Off — tap the pin FAB on the map to share";
+            LocationStatusText = "Sharing off — tap the pin FAB on the map to share. Coordinates appear here while sharing.";
             return;
         }
 
         var location = _locationService.LastKnownLocation;
         if (location is null)
         {
-            LocationStatusText = "On — Waiting for GPS…";
+            LocationStatusText = "Sharing on — waiting for GPS…";
             return;
         }
 
         var lat = Math.Round(location.Latitude, 4);
         var lon = Math.Round(location.Longitude, 4);
-        LocationStatusText = $"On — {lat:0.0000}, {lon:0.0000}";
+        LocationStatusText = $"Sharing on — {lat:0.0000}, {lon:0.0000}";
     }
 
     private void ApplyFamilyStateFromService()
@@ -366,6 +369,28 @@ public class SettingsViewModel : INotifyPropertyChanged
         {
             CrashLogHint = "Could not clear crash log.";
             try { _crashLog.LogError("ClearCrashLog failed", ex); } catch { /* ignore */ }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        if (IsBusy)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            if (_locationService.IsSharingEnabled)
+                await _locationService.DisableSharingAsync();
+            await _familyService.ClearPublishedLocationAsync();
+            UpdateLocationStatus();
+
+            await _authService.SignOutAsync();
+            await Shell.Current.GoToAsync("//LoginPage");
         }
         finally
         {

@@ -27,7 +27,24 @@ public partial class MapPage : ContentPage
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         _viewModel.MarkersChanged += OnMarkersChanged;
         _viewModel.SelfPinChanged += OnSelfPinChanged;
+        _viewModel.UnlockFollowRequested += OnUnlockFollowRequested;
         MapWebView.Navigating += OnMapWebViewNavigating;
+    }
+
+    private void OnUnlockFollowRequested(object? sender, EventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            try
+            {
+                await EvalAsync("(function(){ try { if (typeof window.unlockUser==='function') window.unlockUser(); return '1'; } catch(e) { return '0'; } })()");
+                _viewModel.SetFollowLocked(false);
+            }
+            catch
+            {
+                // ignore WebView race
+            }
+        });
     }
 
     protected override async void OnAppearing()
@@ -213,6 +230,7 @@ public partial class MapPage : ContentPage
 
             await SyncSelfPinAsync(forceCenter: forceSelfCenter || !_centeredOnSelf || _pendingForceCenter);
             await SyncFamilyMarkersAsync();
+            await RefreshFollowLockStateAsync();
         }
         catch
         {
@@ -311,6 +329,20 @@ public partial class MapPage : ContentPage
         }
     }
 
+    private async Task RefreshFollowLockStateAsync()
+    {
+        try
+        {
+            var locked = await EvalAsync(
+                "(function(){ try { return (typeof window.isLocked==='function' && window.isLocked()==='1') ? '1' : '0'; } catch(e) { return '0'; } })()");
+            _viewModel.SetFollowLocked(IsJsTruthy(locked));
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
     private async Task SyncFamilyMarkersAsync()
     {
         try
@@ -333,6 +365,8 @@ public partial class MapPage : ContentPage
                 await EvalAsync($"(function(){{ try {{ window.upsertUser('{idS}', {latS}, {lonS}, '{labelS}'); }} catch(e) {{}} }})()");
                 _renderedFamilyIds.Add(id);
             }
+
+            await RefreshFollowLockStateAsync();
         }
         catch
         {
