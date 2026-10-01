@@ -27,6 +27,8 @@ public class MapViewModel : INotifyPropertyChanged
     private CancellationTokenSource? _pollCts;
     private bool _isPageVisible;
     private bool _isFollowLocked;
+    private string _selfAlias = UserDisplayPreferences.DefaultAlias;
+    private string _selfPinColor = UserDisplayPreferences.DefaultPinColor;
 
     /// <summary>Snapshot of family markers for the WebView (uid → lat/lon/label). Self uses id "self".</summary>
     public IReadOnlyDictionary<string, (double Lat, double Lon, string Label)> FamilyMarkers { get; private set; }
@@ -80,6 +82,32 @@ public class MapViewModel : INotifyPropertyChanged
     {
         get => _pinLongitude;
         private set { _pinLongitude = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>Local display name shown above the self pin (Preferences).</summary>
+    public string SelfAlias
+    {
+        get => _selfAlias;
+        private set
+        {
+            if (_selfAlias == value)
+                return;
+            _selfAlias = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Self pin hex colour from Preferences (default light purple).</summary>
+    public string SelfPinColor
+    {
+        get => _selfPinColor;
+        private set
+        {
+            if (string.Equals(_selfPinColor, value, StringComparison.OrdinalIgnoreCase))
+                return;
+            _selfPinColor = value;
+            OnPropertyChanged();
+        }
     }
 
     public bool IsSharingEnabled
@@ -172,6 +200,14 @@ public class MapViewModel : INotifyPropertyChanged
         UnlockFollowCommand = new Command(RequestUnlockFollow, () => !IsBusy && IsFollowLocked);
         OpenSettingsCommand = new Command(async () => await OpenSettingsAsync());
         IsSharingEnabled = _locationService.IsSharingEnabled;
+        ReloadDisplayPreferences();
+    }
+
+    /// <summary>Reload alias/colour from Preferences (call when returning from Settings).</summary>
+    public void ReloadDisplayPreferences()
+    {
+        SelfAlias = UserDisplayPreferences.GetAlias();
+        SelfPinColor = UserDisplayPreferences.GetPinColor();
     }
 
     private void RequestUnlockFollow()
@@ -191,6 +227,7 @@ public class MapViewModel : INotifyPropertyChanged
         _isPageVisible = true;
         try
         {
+            ReloadDisplayPreferences();
             _locationService.PositionChanged -= OnPositionChanged;
             _locationService.PositionChanged += OnPositionChanged;
 
@@ -431,20 +468,17 @@ public class MapViewModel : INotifyPropertyChanged
             return;
         }
 
-        var parts = new List<string>();
-        if (HasSelfPin)
-        {
-            if (_selfPinOnMap)
-                parts.Add("You are on the map");
-            else
-                parts.Add("Fix acquired — centering…");
-        }
+        // Status chip removed in v0.2.14 — keep StatusMessage for empty-state only.
+        // While content is visible, clear waiting hints; ToggleHint covers GPS wait.
+        if (HasSelfPin && _selfPinOnMap)
+            ToggleHint = null;
 
-        if (FamilyMarkerCount > 0)
-            parts.Add($"{FamilyMarkerCount} family sharing");
-
-        // Coords + family code live in Settings — keep the map chip terse.
-        StatusMessage = string.Join(" · ", parts);
+        if (HasSelfPin && !_selfPinOnMap)
+            StatusMessage = "Fix acquired — centering…";
+        else if (FamilyMarkerCount > 0)
+            StatusMessage = $"{FamilyMarkerCount} family sharing";
+        else
+            StatusMessage = string.Empty;
     }
 
     private void StartFamilyPoll()

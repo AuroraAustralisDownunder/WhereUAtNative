@@ -1,4 +1,5 @@
 using System.Globalization;
+using WhereUAtNative.Services;
 using WhereUAtNative.ViewModels;
 
 namespace WhereUAtNative.Views;
@@ -100,7 +101,9 @@ public partial class MapPage : ContentPage
         if (e.PropertyName is nameof(MapViewModel.HasSelfPin)
             or nameof(MapViewModel.PinLatitude)
             or nameof(MapViewModel.PinLongitude)
-            or nameof(MapViewModel.HasMapContent))
+            or nameof(MapViewModel.HasMapContent)
+            or nameof(MapViewModel.SelfAlias)
+            or nameof(MapViewModel.SelfPinColor))
         {
             MainThread.BeginInvokeOnMainThread(async () =>
                 await SyncMapFromViewModelAsync(forceSelfCenter: !_centeredOnSelf));
@@ -252,6 +255,8 @@ public partial class MapPage : ContentPage
                 var lon = _viewModel.PinLongitude;
                 var latS = lat.ToString(CultureInfo.InvariantCulture);
                 var lonS = lon.ToString(CultureInfo.InvariantCulture);
+                var aliasS = EscapeJs(_viewModel.SelfAlias);
+                var colorS = EscapeJs(_viewModel.SelfPinColor);
                 // Force center only until we've successfully put the self marker on the map once.
                 // map.html setPin(force) does flyTo@16 + short layout retries — no C# reinject loop.
                 var shouldCenter = forceCenter || !_centeredOnSelf || _pendingForceCenter;
@@ -261,7 +266,7 @@ public partial class MapPage : ContentPage
                 var inject = await EvalAsync(
                     "(function(){ try {" +
                     " if (typeof window.setPin !== 'function') return 'NOFN';" +
-                    $" var r = window.setPin({latS}, {lonS}, {centerFlag});" +
+                    $" var r = window.setPin({latS}, {lonS}, {centerFlag}, '{aliasS}', '{colorS}');" +
                     " var ok = (typeof window.hasUser === 'function' && window.hasUser('self'));" +
                     " return ok ? ('OK:' + String(r)) : ('MISS:' + String(r));" +
                     " } catch(e) { return 'ERR:' + String(e); } })()");
@@ -285,7 +290,7 @@ public partial class MapPage : ContentPage
                     inject = await EvalAsync(
                         "(function(){ try {" +
                         " if (typeof window.setPin !== 'function') return 'NOFN';" +
-                        $" window.setPin({latS}, {lonS}, true);" +
+                        $" window.setPin({latS}, {lonS}, true, '{aliasS}', '{colorS}');" +
                         " var ok = (typeof window.hasUser === 'function' && window.hasUser('self'));" +
                         " return ok ? 'OK' : 'MISS';" +
                         " } catch(e) { return 'ERR'; } })()");

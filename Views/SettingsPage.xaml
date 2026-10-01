@@ -37,6 +37,83 @@
                 </VerticalStackLayout>
             </Border>
 
+
+            <Border Stroke="#3A3A3C"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    BackgroundColor="#2C2C2E"
+                    Padding="16">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Map display"
+                           FontAttributes="Bold"
+                           FontSize="16"
+                           TextColor="#FFFFFF" />
+                    <Label Text="Alias name — shown above your pin on the map"
+                           FontSize="13"
+                           TextColor="#8E8E93" />
+                    <Entry Text="{Binding AliasName, Mode=TwoWay}"
+                           Placeholder="You"
+                           PlaceholderColor="#8E8E93"
+                           TextColor="#FFFFFF"
+                           BackgroundColor="#1C1C1E"
+                           MaxLength="24"
+                           HeightRequest="44" />
+                    <Button Text="Save alias"
+                            BackgroundColor="#3A3A3C"
+                            TextColor="White"
+                            CornerRadius="10"
+                            HeightRequest="40"
+                            Command="{Binding SaveAliasCommand}"
+                            IsEnabled="{Binding IsNotBusy}" />
+
+                    <Label Text="Your pin colour"
+                           FontSize="13"
+                           TextColor="#8E8E93"
+                           Margin="0,4,0,0" />
+                    <Label Text="{Binding SelectedPinColorName, StringFormat='Selected: {0}'}"
+                           FontSize="13"
+                           TextColor="#E5E5EA" />
+
+                    <!-- Simple colour swatches (tap to choose); selection shown in label above -->
+                    <HorizontalStackLayout Spacing="10">
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#B794F6" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#B794F6"
+                                SemanticProperties.Description="Light purple" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#64B5F6" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#64B5F6"
+                                SemanticProperties.Description="Soft blue" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#4DB6AC" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#4DB6AC"
+                                SemanticProperties.Description="Soft teal" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#F48FB1" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#F48FB1"
+                                SemanticProperties.Description="Soft pink" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#FFB74D" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#FFB74D"
+                                SemanticProperties.Description="Soft orange" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#81C784" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#81C784"
+                                SemanticProperties.Description="Muted green" />
+                        <Button WidthRequest="40" HeightRequest="40" CornerRadius="20" Padding="0"
+                                Text="" BackgroundColor="#7986CB" TextColor="Transparent"
+                                Command="{Binding SelectPinColorCommand}" CommandParameter="#7986CB"
+                                SemanticProperties.Description="Soft indigo" />
+                    </HorizontalStackLayout>
+
+                    <Label Text="{Binding DisplayHint}"
+                           FontSize="13"
+                           TextColor="#FFB74D"
+                           IsVisible="{Binding IsDisplayHintVisible}"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
             <Border Stroke="#3A3A3C"
                     StrokeThickness="1"
                     StrokeShape="RoundRectangle 14"
