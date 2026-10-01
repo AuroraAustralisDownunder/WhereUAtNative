@@ -23,23 +23,38 @@
                TextColor="#AEAEB2"
                Margin="0,0,0,16" />
 
-        <Entry Placeholder="Email"
-               PlaceholderColor="#8E8E93"
-               Keyboard="Email"
-               ClearButtonVisibility="WhileEditing"
-               Text="{Binding Email}"
-               TextColor="#FFFFFF"
-               BackgroundColor="#3A3A3C"
-               IsEnabled="{Binding IsNotBusy}" />
+        <!-- Bordered fields without Material underline (handler clears Android tint) -->
+        <Border Stroke="#3A3A3C"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 10"
+                BackgroundColor="#3A3A3C"
+                Padding="12,4">
+            <Entry x:Name="EmailEntry"
+                   Placeholder="Email"
+                   PlaceholderColor="#8E8E93"
+                   Keyboard="Email"
+                   ClearButtonVisibility="WhileEditing"
+                   Text="{Binding Email}"
+                   TextColor="#FFFFFF"
+                   BackgroundColor="Transparent"
+                   IsEnabled="{Binding IsNotBusy}" />
+        </Border>
 
-        <Entry Placeholder="Password"
-               PlaceholderColor="#8E8E93"
-               IsPassword="True"
-               ClearButtonVisibility="WhileEditing"
-               Text="{Binding Password}"
-               TextColor="#FFFFFF"
-               BackgroundColor="#3A3A3C"
-               IsEnabled="{Binding IsNotBusy}" />
+        <Border Stroke="#3A3A3C"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 10"
+                BackgroundColor="#3A3A3C"
+                Padding="12,4">
+            <Entry x:Name="PasswordEntry"
+                   Placeholder="Password"
+                   PlaceholderColor="#8E8E93"
+                   IsPassword="True"
+                   ClearButtonVisibility="WhileEditing"
+                   Text="{Binding Password}"
+                   TextColor="#FFFFFF"
+                   BackgroundColor="Transparent"
+                   IsEnabled="{Binding IsNotBusy}" />
+        </Border>
 
         <Button Text="Secure Login"
                 BackgroundColor="#4CAF50"

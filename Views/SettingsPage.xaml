@@ -25,9 +25,14 @@
                            FontSize="15"
                            TextColor="#E5E5EA"
                            LineBreakMode="MiddleTruncation" />
-                    <Label Text="{Binding LocationStatusText}"
+                    <Label Text="Your coordinates"
                            FontSize="13"
-                           TextColor="#AEAEB2"
+                           FontAttributes="Bold"
+                           TextColor="#8E8E93"
+                           Margin="0,8,0,0" />
+                    <Label Text="{Binding LocationStatusText}"
+                           FontSize="14"
+                           TextColor="#E5E5EA"
                            LineBreakMode="WordWrap" />
                 </VerticalStackLayout>
             </Border>
@@ -188,6 +193,14 @@
                                IsVisible="{Binding IsBusy}"
                                Color="#4CAF50"
                                HeightRequest="36" />
+
+            <Button Text="Sign out"
+                    BackgroundColor="#E53935"
+                    TextColor="White"
+                    CornerRadius="10"
+                    HeightRequest="48"
+                    Command="{Binding SignOutCommand}"
+                    IsEnabled="{Binding IsNotBusy}" />
 
             <Button Text="Done"
                     BackgroundColor="#3A3A3C"

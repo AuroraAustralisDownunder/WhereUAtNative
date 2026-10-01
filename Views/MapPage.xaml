@@ -18,19 +18,19 @@
         <WebView x:Name="MapWebView"
                  Navigated="OnMapWebViewNavigated" />
 
-        <!-- Soft empty-state overlay (map still behind) -->
+        <!-- Soft empty-state overlay at bottom (map stays clear) -->
         <Border IsVisible="{Binding ShowEmptyOverlay}"
                 BackgroundColor="#CC1C1C1E"
                 StrokeThickness="0"
-                Padding="28"
-                VerticalOptions="Center"
-                HorizontalOptions="Center"
-                Margin="32,0"
-                MaximumWidthRequest="360"
-                StrokeShape="RoundRectangle 16">
-            <VerticalStackLayout Spacing="10">
+                Padding="20,14"
+                VerticalOptions="End"
+                HorizontalOptions="Fill"
+                Margin="16,0,16,24"
+                MaximumWidthRequest="420"
+                StrokeShape="RoundRectangle 14">
+            <VerticalStackLayout Spacing="6">
                 <Label Text="{Binding StatusMessage}"
-                       FontSize="15"
+                       FontSize="14"
                        HorizontalTextAlignment="Center"
                        TextColor="#E5E5EA"
                        LineBreakMode="WordWrap" />
@@ -42,7 +42,7 @@
             </VerticalStackLayout>
         </Border>
 
-        <!-- Compact status chip when map has content -->
+        <!-- Compact status chip when map has content (no coords / family code) -->
         <Border IsVisible="{Binding HasMapContent}"
                 Stroke="#3A3A3C"
                 StrokeThickness="1"
@@ -59,13 +59,13 @@
                    MaxLines="2" />
         </Border>
 
-        <!-- Toggle hint (permission / GPS) — above bottom Unlock bar, clear of mid-right FABs -->
+        <!-- Toggle hint (permission / GPS) — bottom, clear of mid-right FABs -->
         <Border IsVisible="{Binding IsToggleHintVisible}"
                 StrokeThickness="0"
                 BackgroundColor="#E62C2C2E"
                 StrokeShape="RoundRectangle 10"
                 Padding="12,8"
-                Margin="12,0,72,88"
+                Margin="12,0,72,24"
                 VerticalOptions="End"
                 HorizontalOptions="Fill">
             <Label Text="{Binding ToggleHint}"
@@ -74,7 +74,7 @@
                    LineBreakMode="WordWrap" />
         </Border>
 
-        <!-- Mid-right FAB stack (~40–45% down via Center + upward bias) — clears Leaflet Unlock -->
+        <!-- Mid-right FAB column: pin (share) then padlock (unlock follow) -->
         <VerticalStackLayout HorizontalOptions="End"
                              VerticalOptions="Center"
                              Margin="0,0,18,0"
@@ -93,18 +93,18 @@
                     Command="{Binding ToggleSharingCommand}"
                     SemanticProperties.Description="Toggle location sharing" />
 
-            <!-- Sign out FAB — secondary / smaller -->
-            <Button WidthRequest="44"
-                    HeightRequest="44"
-                    CornerRadius="22"
+            <!-- Unlock follow FAB — padlock under pin -->
+            <Button WidthRequest="48"
+                    HeightRequest="48"
+                    CornerRadius="24"
                     Padding="0"
-                    FontSize="11"
-                    FontAttributes="Bold"
-                    Text="Out"
-                    TextColor="#E5E5EA"
-                    BackgroundColor="#3A3A3C"
-                    Command="{Binding SignOutCommand}"
-                    SemanticProperties.Description="Sign out" />
+                    FontSize="20"
+                    Text="🔒"
+                    TextColor="#FFFFFF"
+                    BackgroundColor="{Binding UnlockFabColor}"
+                    IsVisible="{Binding IsUnlockFabVisible}"
+                    Command="{Binding UnlockFollowCommand}"
+                    SemanticProperties.Description="Unlock map follow" />
         </VerticalStackLayout>
     </Grid>
 </ContentPage>

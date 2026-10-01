@@ -94,7 +94,7 @@
     .you-pin {
       position: relative;
       width: 56px;
-      height: 72px;
+      height: 56px;
       pointer-events: auto;
     }
     .you-pin-pulse {
@@ -148,69 +148,12 @@
       border-color: #FFD54F;
       box-shadow: 0 4px 14px rgba(0,0,0,0.55), 0 0 0 4px rgba(255, 213, 79, 0.5);
     }
-    .you-pin-caption {
-      position: absolute;
-      left: 50%;
-      bottom: 0;
-      transform: translateX(-50%);
-      background: #FF1744;
-      color: #fff;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 12px;
-      font-weight: 800;
-      padding: 3px 10px;
-      border-radius: 10px;
-      white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
-      border: 2px solid #fff;
-      z-index: 2;
-    }
-
-    #lock-bar {
-      display: none;
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: 18px;
-      z-index: 1000;
-      background: rgba(44,44,46,0.95);
-      color: #F2F2F7;
-      font-family: system-ui, -apple-system, sans-serif;
-      border-radius: 12px;
-      padding: 10px 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      align-items: center;
-      gap: 10px;
-      box-sizing: border-box;
-    }
-    #lock-bar.visible { display: flex; }
-    #lock-label {
-      flex: 1;
-      font-size: 14px;
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    #unlock-btn {
-      border: none;
-      background: #4CAF50;
-      color: #fff;
-      font-weight: 700;
-      font-size: 13px;
-      padding: 8px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+    /* Unlock follow is a native padlock FAB — no HTML lock bar. */
   </style>
 </head>
 <body>
   <div id="empty" class="empty">Turn on location sharing to see yourself on the map.</div>
   <div id="map"></div>
-  <div id="lock-bar">
-    <span id="lock-label">Locked</span>
-    <button type="button" id="unlock-btn">Unlock</button>
-  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin=""></script>
@@ -222,9 +165,6 @@
       var autoLockedSelf = false;
       var emptyEl = document.getElementById('empty');
       var mapEl = document.getElementById('map');
-      var lockBar = document.getElementById('lock-bar');
-      var lockLabel = document.getElementById('lock-label');
-      var unlockBtn = document.getElementById('unlock-btn');
 
       function escapeHtml(s) {
         return String(s == null ? '' : s)
@@ -245,7 +185,7 @@
         if (map) return map;
         mapEl.classList.remove('hidden');
         emptyEl.classList.remove('visible');
-        map = L.map('map', { zoomControl: true, preferCanvas: false }).setView([0, 0], 2);
+        map = L.map('map', { zoomControl: false, preferCanvas: false }).setView([0, 0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -267,13 +207,7 @@
       }
 
       function updateLockBar() {
-        if (!lockedUserId || !users[lockedUserId]) {
-          lockBar.classList.remove('visible');
-          return;
-        }
-        var label = users[lockedUserId].label || lockedUserId;
-        lockLabel.textContent = 'Locked: ' + label;
-        lockBar.classList.add('visible');
+        // Native padlock FAB polls window.isLocked() — nothing to draw here.
       }
 
       function refreshMarkerStyles() {
@@ -342,26 +276,19 @@
         updateLockBar();
       }
 
-      unlockBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        unlock();
-      });
-
       function makeSelfIcon(isLocked) {
         var lockedClass = isLocked ? ' locked' : '';
         var html =
           '<div class="you-pin' + lockedClass + '">' +
             '<div class="you-pin-pulse"></div>' +
             '<div class="you-pin-head"><div class="you-pin-head-inner">You</div></div>' +
-            '<div class="you-pin-caption">You are here</div>' +
           '</div>';
         return L.divIcon({
           className: 'you-pin-wrap',
           html: html,
-          iconSize: [56, 72],
-          iconAnchor: [28, 68],
-          popupAnchor: [0, -60]
+          iconSize: [56, 56],
+          iconAnchor: [28, 52],
+          popupAnchor: [0, -48]
         });
       }
 
@@ -458,7 +385,6 @@
         if (lockedUserId === id) unlock();
         if (Object.keys(users).length === 0) {
           emptyEl.classList.remove('visible');
-          lockBar.classList.remove('visible');
         }
       };
 
@@ -471,7 +397,6 @@
         users = {};
         lockedUserId = null;
         autoLockedSelf = false;
-        lockBar.classList.remove('visible');
       };
 
       window.setPin = function (lat, lon, forceCenter) {
@@ -558,6 +483,7 @@
 
       window.lockUser = function (id) { setLock(String(id)); };
       window.unlockUser = function () { unlock(); };
+      window.isLocked = function () { return lockedUserId ? '1' : '0'; };
       window.hasUser = function (id) { return !!users[String(id == null ? '' : id)]; };
 
       /** '1' only when self pin exists, lock-followed, and map is at neighbourhood zoom (not world/country). */
