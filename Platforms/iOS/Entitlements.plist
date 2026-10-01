@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Minimal iOS entitlements for Where U At sideload / TestFlight.
+  When-in-use location does NOT need a special entitlement (only Info.plist usage string).
+  Do NOT add aps-environment / push / iCloud until those features exist —
+  free Apple IDs cannot use most paid capabilities anyway.
+-->
+<dict>
+	<!-- Uncomment if you add associated domains or App Groups later.
+	<key>com.apple.developer.associated-domains</key>
+	<array/>
+	-->
+</dict>
+</plist>

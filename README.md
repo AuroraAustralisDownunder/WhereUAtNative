@@ -166,6 +166,24 @@ Fatal and Error events (uncaught exceptions, unobserved tasks, Android unhandled
 
 - Background tracking only if product explicitly requires it
 
+
+## iPhone / iOS (sideload on a Mac)
+
+**This Linux environment cannot produce a signed `.ipa`.** You need an **iMac/Mac + Xcode** and an Apple ID.
+
+Full steps: **[IOS-SIDELOAD.md](IOS-SIDELOAD.md)** (free 7-day Xcode install, AltStore/Sideloadly, or TestFlight with paid $99 account).
+
+Short path on the Mac after cloning:
+
+```bash
+dotnet workload install maui   # once
+dotnet restore
+# plug in iPhone, Trust, enable Developer Mode (iOS 16+)
+dotnet build -t:Run -f net10.0-ios -c Debug
+```
+
+Then on the iPhone: **Settings → General → VPN & Device Management** → trust your developer certificate. Bundle id: `com.familytracker.whereuat`.
+
 ## Android release APK (Obtainium)
 
 Release builds are signed with a local keystore at `keystore/whereuat-release.jks` (gitignored). Set:
