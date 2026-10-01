@@ -70,22 +70,22 @@
     .user-marker-label {
       position: absolute;
       left: 50%;
-      top: 100%;
+      bottom: 100%;
       transform: translateX(-50%);
-      margin-top: 4px;
+      margin-bottom: 6px;
       background: rgba(28,28,30,0.92);
       color: #F2F2F7;
       font-family: system-ui, -apple-system, sans-serif;
       font-size: 11px;
       font-weight: 600;
-      padding: 2px 6px;
+      padding: 2px 7px;
       border-radius: 6px;
       white-space: nowrap;
       pointer-events: none;
       box-shadow: 0 1px 4px rgba(0,0,0,0.35);
     }
 
-    /* Large unmistakable SELF pin — teardrop + pulse (NOT the FAB). */
+    /* SELF pin — teardrop + pulse; alias label sits ABOVE (not inside). */
     .you-pin-wrap {
       background: transparent !important;
       border: none !important;
@@ -93,20 +93,40 @@
     }
     .you-pin {
       position: relative;
-      width: 56px;
+      width: 48px;
       height: 56px;
       pointer-events: auto;
+    }
+    .you-pin-label {
+      position: absolute;
+      left: 50%;
+      bottom: 100%;
+      transform: translateX(-50%);
+      margin-bottom: 6px;
+      background: rgba(28,28,30,0.92);
+      color: #F2F2F7;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .you-pin-pulse {
       position: absolute;
       left: 50%;
       top: 22px;
-      width: 28px;
-      height: 28px;
-      margin-left: -14px;
-      margin-top: -14px;
+      width: 26px;
+      height: 26px;
+      margin-left: -13px;
+      margin-top: -13px;
       border-radius: 50%;
-      background: rgba(255, 23, 68, 0.35);
+      background: rgba(183, 148, 246, 0.35);
       animation: you-pulse 1.6s ease-out infinite;
       z-index: 0;
     }
@@ -118,35 +138,34 @@
     .you-pin-head {
       position: absolute;
       left: 50%;
-      top: 0;
-      width: 48px;
-      height: 48px;
-      margin-left: -24px;
+      top: 4px;
+      width: 40px;
+      height: 40px;
+      margin-left: -20px;
       border-radius: 50% 50% 50% 0;
       transform: rotate(-45deg);
-      background: linear-gradient(135deg, #FF5252 0%, #D50000 100%);
+      background: linear-gradient(135deg, #D1B3FF 0%, #B794F6 55%, #9A7FD4 100%);
       border: 3px solid #FFFFFF;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.55), 0 0 0 4px rgba(255, 23, 68, 0.35);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 0 3px rgba(183, 148, 246, 0.35);
       z-index: 1;
       box-sizing: border-box;
     }
-    .you-pin-head-inner {
+    .you-pin-dot {
       position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      left: 50%;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      margin-left: -5px;
+      margin-top: -5px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.95);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.25);
       transform: rotate(45deg);
-      color: #fff;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-weight: 800;
-      font-size: 13px;
-      letter-spacing: 0.02em;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
     }
     .you-pin.locked .you-pin-head {
       border-color: #FFD54F;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.55), 0 0 0 4px rgba(255, 213, 79, 0.5);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 0 3px rgba(255, 213, 79, 0.5);
     }
     /* Unlock follow is a native padlock FAB — no HTML lock bar. */
   </style>
@@ -276,24 +295,64 @@
         updateLockBar();
       }
 
-      function makeSelfIcon(isLocked) {
+      var selfPinColor = '#B794F6';
+
+      function normalizeHexColor(c) {
+        if (c == null || c === '') return '#B794F6';
+        var s = String(c).trim();
+        if (s.charAt(0) !== '#') s = '#' + s;
+        if (!/^#[0-9A-Fa-f]{6}$/.test(s)) return '#B794F6';
+        return s.toUpperCase();
+      }
+
+      function hexToRgb(hex) {
+        hex = normalizeHexColor(hex).slice(1);
+        return {
+          r: parseInt(hex.slice(0, 2), 16),
+          g: parseInt(hex.slice(2, 4), 16),
+          b: parseInt(hex.slice(4, 6), 16)
+        };
+      }
+
+      function shadeHex(hex, factor) {
+        var rgb = hexToRgb(hex);
+        var r = Math.max(0, Math.min(255, Math.round(rgb.r * factor)));
+        var g = Math.max(0, Math.min(255, Math.round(rgb.g * factor)));
+        var b = Math.max(0, Math.min(255, Math.round(rgb.b * factor)));
+        return '#' + [r, g, b].map(function (n) {
+          var h = n.toString(16);
+          return h.length === 1 ? '0' + h : h;
+        }).join('').toUpperCase();
+      }
+
+      function makeSelfIcon(isLocked, label, colorHex) {
         var lockedClass = isLocked ? ' locked' : '';
+        var color = normalizeHexColor(colorHex || selfPinColor);
+        var light = shadeHex(color, 1.12);
+        var dark = shadeHex(color, 0.82);
+        var rgb = hexToRgb(color);
+        var pulse = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.35)';
+        var glow = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.35)';
+        var alias = (label == null || label === '') ? 'You' : String(label);
         var html =
           '<div class="you-pin' + lockedClass + '">' +
-            '<div class="you-pin-pulse"></div>' +
-            '<div class="you-pin-head"><div class="you-pin-head-inner">You</div></div>' +
+            '<div class="you-pin-label">' + escapeHtml(alias) + '</div>' +
+            '<div class="you-pin-pulse" style="background:' + pulse + ';"></div>' +
+            '<div class="you-pin-head" style="background:linear-gradient(135deg,' + light + ' 0%,' + color + ' 55%,' + dark + ' 100%);box-shadow:0 4px 14px rgba(0,0,0,0.45),0 0 0 3px ' + glow + ';">' +
+              '<div class="you-pin-dot"></div>' +
+            '</div>' +
           '</div>';
         return L.divIcon({
           className: 'you-pin-wrap',
           html: html,
-          iconSize: [56, 56],
-          iconAnchor: [28, 52],
+          iconSize: [48, 56],
+          iconAnchor: [24, 52],
           popupAnchor: [0, -48]
         });
       }
 
-      function makeIcon(id, label, isLocked) {
-        if (id === 'self') return makeSelfIcon(isLocked);
+      function makeIcon(id, label, isLocked, colorHex) {
+        if (id === 'self') return makeSelfIcon(isLocked, label, colorHex);
         var initial = initialFor(label);
         var html =
           '<div class="user-marker' + (isLocked ? ' locked' : '') + '">' + escapeHtml(initial) + '</div>' +
@@ -307,19 +366,21 @@
         });
       }
 
-      function ensureSelfRing(latlng) {
+      function ensureSelfRing(latlng, colorHex) {
         ensureMap();
+        var color = normalizeHexColor(colorHex || selfPinColor);
         var existing = users['self'];
         if (existing && existing.ring) {
           existing.ring.setLatLng(latlng);
+          existing.ring.setStyle({ fillColor: color });
           return existing.ring;
         }
         // Canvas/SVG fallback ring so a pin is ALWAYS visible even if DivIcon mis-renders.
         var ring = L.circleMarker(latlng, {
-          radius: 14,
+          radius: 12,
           color: '#FFFFFF',
           weight: 3,
-          fillColor: '#FF1744',
+          fillColor: color,
           fillOpacity: 0.85,
           opacity: 1,
           pane: 'overlayPane'
@@ -327,33 +388,40 @@
         return ring;
       }
 
-      window.upsertUser = function (id, lat, lon, label) {
+      window.upsertUser = function (id, lat, lon, label, colorHex) {
         id = String(id == null ? '' : id);
         if (!id) return '0';
         lat = Number(lat);
         lon = Number(lon);
         if (!isFinite(lat) || !isFinite(lon)) return '0';
         label = (label == null || label === '') ? id : String(label);
+        if (id === 'self' && colorHex != null && colorHex !== '')
+          selfPinColor = normalizeHexColor(colorHex);
 
         ensureMap();
         var latlng = L.latLng(lat, lon);
         var existing = users[id];
+        var pinColor = id === 'self' ? selfPinColor : null;
 
         if (existing) {
           existing.lat = lat;
           existing.lon = lon;
           existing.label = label;
           existing.marker.setLatLng(latlng);
-          existing.marker.setIcon(makeIcon(id, label, id === lockedUserId));
+          existing.marker.setIcon(makeIcon(id, label, id === lockedUserId, pinColor));
           existing.marker.setPopupContent(escapeHtml(label));
           if (id === 'self') {
             existing.marker.setZIndexOffset(4000);
-            if (existing.ring) existing.ring.setLatLng(latlng);
-            else existing.ring = ensureSelfRing(latlng);
+            if (existing.ring) {
+              existing.ring.setLatLng(latlng);
+              existing.ring.setStyle({ fillColor: selfPinColor });
+            } else {
+              existing.ring = ensureSelfRing(latlng, selfPinColor);
+            }
           }
         } else {
           var marker = L.marker(latlng, {
-            icon: makeIcon(id, label, id === lockedUserId),
+            icon: makeIcon(id, label, id === lockedUserId, pinColor),
             keyboard: true,
             riseOnHover: true,
             zIndexOffset: id === 'self' ? 4000 : 100
@@ -363,7 +431,7 @@
             setLock(id);
           });
           var ring = null;
-          if (id === 'self') ring = ensureSelfRing(latlng);
+          if (id === 'self') ring = ensureSelfRing(latlng, selfPinColor);
           users[id] = { marker: marker, ring: ring, lat: lat, lon: lon, label: label };
         }
 
@@ -399,7 +467,7 @@
         autoLockedSelf = false;
       };
 
-      window.setPin = function (lat, lon, forceCenter) {
+      window.setPin = function (lat, lon, forceCenter, label, colorHex) {
         lat = Number(lat);
         lon = Number(lon);
         // MAUI EvaluateJavaScript may pass booleans as strings.
@@ -411,6 +479,9 @@
         if (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) {
           return '0';
         }
+        if (colorHex != null && colorHex !== '')
+          selfPinColor = normalizeHexColor(colorHex);
+        var alias = (label == null || label === '') ? 'You' : String(label);
         ensureMap();
         var first = !users['self'];
         var alreadyNeighborhood = false;
@@ -430,7 +501,7 @@
         // Upsert without auto-centering yet (we drive flyTo below so first fix never pans at zoom 2).
         var prevLock = lockedUserId;
         if (needFirstCenter) lockedUserId = null; // prevent upsertUser→centerOnLocked(panTo@zoom2)
-        window.upsertUser('self', lat, lon, 'You');
+        window.upsertUser('self', lat, lon, alias, selfPinColor);
         lockedUserId = prevLock;
 
         // First fix OR forced: lock-follow + neighbourhood zoom 16 (v0.1.1 UX).

@@ -19,7 +19,7 @@ dotnet build -t:Run -f net10.0-android
 |--------|--------|
 | Application title | Where U At |
 | Android / iOS package id | `com.familytracker.whereuat` |
-| Display version | `0.2.13` (versionCode `16`) |
+| Display version | `0.2.14` (versionCode `17`) |
 | Firebase project | `whereuat-firebase` |
 
 Firebase config files already live under:
@@ -40,7 +40,8 @@ Create (or use) a **Firebase Authentication** email/password user in the `whereu
 - Sharing defaults to **Off** (device preference `location_sharing_enabled` = false).
 - The map **pin FAB** (mid-right) toggles Share my location — green when on, muted when off. It requests **when-in-use** permission, then reads GPS. **Your self pin only appears while sharing is ON** (local display + optional family upload).
 - While map follow is locked on a marker, a **padlock FAB** appears under the pin; tap it to unlock (finger-pan freely). Leaflet +/- zoom controls are hidden — pinch to zoom.
-- GPS cold starts / session restore: when Share my location was left **On**, cold open re-inits the **foreground location listener** (Medium) with a brief listener wait before one-shots — same path as tapping the pin (avoids the restore race that hung GPS while the map WebView was still loading). Accepts last-known (up to ~30 min), then Medium→Low→Lowest one-shots. Status shows **“Sharing on — waiting for GPS…”** until a fix, then **“Fix acquired — centering…”**, then a short “on the map” chip (no coords on the map). If the WebView was not ready, the pin is queued and re-injected when the bridge is up.
+- GPS cold starts / session restore: when Share my location was left **On**, cold open re-inits the **foreground location listener** (Medium) with a brief listener wait before one-shots — same path as tapping the pin (avoids the restore race that hung GPS while the map WebView was still loading). Accepts last-known (up to ~30 min), then Medium→Low→Lowest one-shots. A bottom **ToggleHint** shows **“Sharing on — waiting for GPS…”** until a fix (no top status chip). If the WebView was not ready, the pin is queued and re-injected when the bridge is up.
+- Self pin defaults to **light purple** with your **Alias Name** as a sleek label **above** the pin (not inside). Change alias and pin colour under **Settings → Map display** (local Preferences).
 - **Coordinates**, **family code**, and **Sign out** live under **Settings** (map stays clean). Coords are rounded (~4 decimal places).
 - While sharing is on **and** you are in a family, the app writes your live position to Firebase Realtime Database under `families/{code}/locations/{uid}` (foreground only).
 - Turning sharing **Off**, leaving the family, or signing out removes your published location. The off/empty hint sits at the **bottom** of the map so it stays out of the way.

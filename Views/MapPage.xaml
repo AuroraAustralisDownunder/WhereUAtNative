@@ -42,22 +42,6 @@
             </VerticalStackLayout>
         </Border>
 
-        <!-- Compact status chip when map has content (no coords / family code) -->
-        <Border IsVisible="{Binding HasMapContent}"
-                Stroke="#3A3A3C"
-                StrokeThickness="1"
-                BackgroundColor="#E62C2C2E"
-                StrokeShape="RoundRectangle 12"
-                Padding="12,8"
-                Margin="12,12,72,0"
-                VerticalOptions="Start"
-                HorizontalOptions="Fill">
-            <Label Text="{Binding StatusMessage}"
-                   FontSize="12"
-                   TextColor="#E5E5EA"
-                   LineBreakMode="TailTruncation"
-                   MaxLines="2" />
-        </Border>
 
         <!-- Toggle hint (permission / GPS) — bottom, clear of mid-right FABs -->
         <Border IsVisible="{Binding IsToggleHintVisible}"

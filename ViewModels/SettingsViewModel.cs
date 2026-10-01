@@ -26,6 +26,9 @@ public class SettingsViewModel : INotifyPropertyChanged
     private string _joinCodeInput = string.Empty;
     private bool _isInFamily;
     private string? _crashLogHint;
+    private string? _displayHint;
+    private string _aliasName = UserDisplayPreferences.DefaultAlias;
+    private string _selectedPinColor = UserDisplayPreferences.DefaultPinColor;
 
     public string AccountEmail
     {
@@ -49,6 +52,8 @@ public class SettingsViewModel : INotifyPropertyChanged
             ((Command)CopyCrashLogCommand).ChangeCanExecute();
             ((Command)ClearCrashLogCommand).ChangeCanExecute();
             ((Command)SignOutCommand).ChangeCanExecute();
+            ((Command)SaveAliasCommand).ChangeCanExecute();
+            ((Command)SelectPinColorCommand).ChangeCanExecute();
         }
     }
 
@@ -62,6 +67,68 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     public string PrivacyReminder { get; } =
         "Location is off by default. Your position is uploaded only while Share my location is ON and you belong to a family — and only to that family’s private location node. Use the green pin FAB on the map to toggle sharing.";
+
+    /// <summary>Display name shown above your map pin (local Preferences).</summary>
+    public string AliasName
+    {
+        get => _aliasName;
+        set
+        {
+            if (_aliasName == value)
+                return;
+            _aliasName = value ?? string.Empty;
+            OnPropertyChanged();
+        }
+    }
+
+    public string SelectedPinColor
+    {
+        get => _selectedPinColor;
+        private set
+        {
+            if (string.Equals(_selectedPinColor, value, StringComparison.OrdinalIgnoreCase))
+                return;
+            _selectedPinColor = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedPinColorName));
+            RefreshPinColorSelectionFlags();
+        }
+    }
+
+    public string SelectedPinColorName
+    {
+        get
+        {
+            foreach (var (name, hex) in UserDisplayPreferences.PinColorChoices)
+            {
+                if (string.Equals(hex, SelectedPinColor, StringComparison.OrdinalIgnoreCase))
+                    return name;
+            }
+            return "Light purple";
+        }
+    }
+
+    public bool IsPinColorPurple => IsSelectedColor("#B794F6");
+    public bool IsPinColorBlue => IsSelectedColor("#64B5F6");
+    public bool IsPinColorTeal => IsSelectedColor("#4DB6AC");
+    public bool IsPinColorPink => IsSelectedColor("#F48FB1");
+    public bool IsPinColorOrange => IsSelectedColor("#FFB74D");
+    public bool IsPinColorGreen => IsSelectedColor("#81C784");
+    public bool IsPinColorIndigo => IsSelectedColor("#7986CB");
+
+    private bool IsSelectedColor(string hex)
+        => string.Equals(SelectedPinColor, UserDisplayPreferences.NormalizeHex(hex), StringComparison.OrdinalIgnoreCase);
+
+    private void RefreshPinColorSelectionFlags()
+    {
+        OnPropertyChanged(nameof(IsPinColorPurple));
+        OnPropertyChanged(nameof(IsPinColorBlue));
+        OnPropertyChanged(nameof(IsPinColorTeal));
+        OnPropertyChanged(nameof(IsPinColorPink));
+        OnPropertyChanged(nameof(IsPinColorOrange));
+        OnPropertyChanged(nameof(IsPinColorGreen));
+        OnPropertyChanged(nameof(IsPinColorIndigo));
+    }
 
     public bool IsInFamily
     {
@@ -114,6 +181,19 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     public bool IsCrashLogHintVisible => !string.IsNullOrWhiteSpace(CrashLogHint);
 
+    public string? DisplayHint
+    {
+        get => _displayHint;
+        set
+        {
+            _displayHint = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDisplayHintVisible));
+        }
+    }
+
+    public bool IsDisplayHintVisible => !string.IsNullOrWhiteSpace(DisplayHint);
+
 
     public string JoinCodeInput
     {
@@ -131,6 +211,8 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ICommand CopyCrashLogCommand { get; }
     public ICommand ClearCrashLogCommand { get; }
     public ICommand SignOutCommand { get; }
+    public ICommand SaveAliasCommand { get; }
+    public ICommand SelectPinColorCommand { get; }
 
     public SettingsViewModel(IAuthService authService, ILocationService locationService, IFamilyService familyService, ICrashLogService crashLog)
     {
@@ -146,16 +228,42 @@ public class SettingsViewModel : INotifyPropertyChanged
         CopyCrashLogCommand = new Command(async () => await CopyCrashLogAsync(), () => !IsBusy);
         ClearCrashLogCommand = new Command(async () => await ClearCrashLogAsync(), () => !IsBusy);
         SignOutCommand = new Command(async () => await SignOutAsync(), () => !IsBusy);
+        SaveAliasCommand = new Command(SaveAlias, () => !IsBusy);
+        SelectPinColorCommand = new Command<string>(SelectPinColor, _ => !IsBusy);
         ApplyFamilyStateFromService();
         UpdateLocationStatus();
+        LoadDisplayPreferences();
     }
 
     public async Task OnAppearingAsync()
     {
         RefreshAccount();
         UpdateLocationStatus();
+        LoadDisplayPreferences();
         await _familyService.RefreshMembershipAsync();
         await RefreshFamilyUiAsync();
+    }
+
+    private void LoadDisplayPreferences()
+    {
+        AliasName = UserDisplayPreferences.GetAlias();
+        SelectedPinColor = UserDisplayPreferences.GetPinColor();
+    }
+
+    private void SaveAlias()
+    {
+        UserDisplayPreferences.SetAlias(AliasName);
+        AliasName = UserDisplayPreferences.GetAlias();
+        DisplayHint = $"Alias saved as “{AliasName}”.";
+    }
+
+    private void SelectPinColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+            return;
+        UserDisplayPreferences.SetPinColor(hex);
+        SelectedPinColor = UserDisplayPreferences.GetPinColor();
+        DisplayHint = $"Pin colour: {SelectedPinColorName}.";
     }
 
     private void RefreshAccount()
@@ -400,6 +508,8 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     private async Task CloseAsync()
     {
+        // Persist alias on leave so a typed name sticks without an extra Save tap.
+        UserDisplayPreferences.SetAlias(AliasName);
         try
         {
             await Shell.Current.GoToAsync("..");
