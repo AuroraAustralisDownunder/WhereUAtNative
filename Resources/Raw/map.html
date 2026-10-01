@@ -293,6 +293,7 @@
         lockedUserId = null;
         refreshMarkerStyles();
         updateLockBar();
+        try { if (map) map.closePopup(); } catch (e) { /* ignore */ }
       }
 
       var selfPinColor = '#B794F6';
@@ -409,7 +410,7 @@
           existing.label = label;
           existing.marker.setLatLng(latlng);
           existing.marker.setIcon(makeIcon(id, label, id === lockedUserId, pinColor));
-          existing.marker.setPopupContent(escapeHtml(label));
+          // Alias already shown above the pin — no Leaflet name bubble.
           if (id === 'self') {
             existing.marker.setZIndexOffset(4000);
             if (existing.ring) {
@@ -426,7 +427,7 @@
             riseOnHover: true,
             zIndexOffset: id === 'self' ? 4000 : 100
           }).addTo(map);
-          marker.bindPopup(escapeHtml(label));
+          // No Leaflet popup on lock/tap — name already above pin.
           marker.on('click', function () {
             setLock(id);
           });
