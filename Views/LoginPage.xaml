@@ -5,9 +5,12 @@
              Title="Family Tracker Login"
              BackgroundColor="#1C1C1E">
 
+    <!-- Start near top so soft keyboard doesn't cover email/password -->
+    <ScrollView VerticalOptions="Fill"
+                VerticalScrollBarVisibility="Never">
     <VerticalStackLayout Spacing="20"
-                         Padding="30"
-                         VerticalOptions="Center"
+                         Padding="30,48,30,30"
+                         VerticalOptions="Start"
                          MaximumWidthRequest="400">
 
         <Label Text="Family Tracker"
@@ -67,7 +70,7 @@
 
         <ActivityIndicator IsRunning="{Binding IsBusy}"
                            IsVisible="{Binding IsBusy}"
-                           Color="#4CAF50"
+                           Color="#FFFFFF"
                            HeightRequest="36" />
 
         <Label Text="{Binding StatusMessage}"
@@ -81,4 +84,5 @@
                IsVisible="{Binding IsErrorVisible}" />
 
     </VerticalStackLayout>
+    </ScrollView>
 </ContentPage>
