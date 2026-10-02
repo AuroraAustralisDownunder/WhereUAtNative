@@ -10,6 +10,8 @@ namespace WhereUAtNative.Services;
 /// indoor/network fixes and racing the listener on Android (regression after v0.1.1 Medium path).
 /// Session restore must call ResumeSharingIfEnabledAsync (listener-first) — raw GetCurrentAsync on a
 /// cold process with preference=true raced one-shots against a just-started listener and hung GPS.
+/// StartListeningSafeAsync trusts Geolocation.IsListeningForeground (not a stale _listening bool)
+/// so OEM silent stops can restart; IsEnabled=false is a soft warning, not a hard abort.
 /// </summary>
 public sealed class LocationService : ILocationService
 {
@@ -64,15 +66,17 @@ public sealed class LocationService : ILocationService
 
             if (!IsDeviceLocationEnabled())
             {
-                SetSharingEnabled(false);
-                ClearLastKnown();
-                _lastFailureHint = "Device location is off — turn on GPS/Location in system Settings.";
-                return (false, _lastFailureHint);
+                // Soft warning only — some OEMs lie about IsEnabled. Still attempt a fix;
+                // FeatureNotEnabledException / failed ladder will surface a clear hint.
+                _lastFailureHint = "Device location may be off — turn on GPS/Location if no fix arrives.";
             }
 
             SetSharingEnabled(true);
             _attemptCount = 0;
-            _lastFailureHint = "Sharing on — waiting for GPS fix…";
+            if (IsDeviceLocationEnabled())
+                _lastFailureHint = "Sharing on — waiting for GPS fix…";
+            else
+                _lastFailureHint = "Device location may be off — turn on GPS/Location if no fix arrives.";
 
             // Continuous updates are the reliable path on Android; one-shot alone often times out.
             await StartListeningSafeAsync();
@@ -136,10 +140,9 @@ public sealed class LocationService : ILocationService
 
             if (!IsDeviceLocationEnabled())
             {
-                // Keep preference — user opted in; device GPS may be temporarily off.
-                await StopListeningSafeAsync();
-                _lastFailureHint = "Device location is off — turn on GPS/Location in system Settings.";
-                return;
+                // Keep preference and still attempt — OEM IsEnabled false-negatives were
+                // aborting resume and leaving the FAB green with no listener.
+                _lastFailureHint = "Device location may be off — turn on GPS/Location if no fix arrives.";
             }
 
             // Already have a fresh in-memory fix from this process — keep listening, skip ladder.
@@ -150,7 +153,10 @@ public sealed class LocationService : ILocationService
             }
 
             _attemptCount = 0;
-            _lastFailureHint = "Sharing on — waiting for GPS fix…";
+            if (IsDeviceLocationEnabled())
+                _lastFailureHint = "Sharing on — waiting for GPS fix…";
+            else
+                _lastFailureHint = "Device location may be off — turn on GPS/Location if no fix arrives.";
 
             await StartListeningSafeAsync();
 
@@ -184,15 +190,14 @@ public sealed class LocationService : ILocationService
                 return null;
             }
 
+            // Do not hard-return on IsEnabled=false — OEMs false-negative; let one-shots
+            // throw FeatureNotEnabledException if location is truly off.
             if (!IsDeviceLocationEnabled())
-            {
-                _lastFailureHint = "Device location is off — turn on GPS/Location in system Settings.";
-                return null;
-            }
+                _lastFailureHint = "Device location may be off — turn on GPS/Location if no fix arrives.";
 
             // Track whether this call is the one that starts the listener — one-shots
             // immediately after StartListeningForeground race the fused provider on Android.
-            var wasListening = _listening || Geolocation.Default.IsListeningForeground;
+            var wasListening = Geolocation.Default.IsListeningForeground;
             await StartListeningSafeAsync();
             var startedNow = !wasListening && (_listening || Geolocation.Default.IsListeningForeground);
 
@@ -286,11 +291,18 @@ public sealed class LocationService : ILocationService
 
     private async Task StartListeningSafeAsync()
     {
-        if (_listening || Geolocation.Default.IsListeningForeground)
+        // Trust the platform flag. A stale _listening=true while the fused provider
+        // already stopped would previously early-return and never restart — permanent
+        // "waiting for GPS" after an OEM silent stop / app resume race.
+        if (Geolocation.Default.IsListeningForeground)
         {
-            _listening = Geolocation.Default.IsListeningForeground;
+            _listening = true;
+            if (_firstFixTcs is null || _firstFixTcs.Task.IsCompleted)
+                _firstFixTcs = new TaskCompletionSource<Location?>(TaskCreationOptions.RunContinuationsAsynchronously);
             return;
         }
+
+        _listening = false;
 
         try
         {
@@ -523,6 +535,9 @@ public sealed class LocationService : ILocationService
 
     private static bool IsDeviceLocationEnabled()
     {
+        // Some OEMs report IsEnabled=false while fused/network providers still deliver.
+        // Callers should prefer attempting a fix and handling FeatureNotEnabledException
+        // over hard-blocking on this flag alone.
         try
         {
             return Geolocation.Default.IsEnabled;
